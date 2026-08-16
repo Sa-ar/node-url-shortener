@@ -1,0 +1,318 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  createColumnHelper,
+  createSortedRowModel,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  tableFeatures,
+  useTable,
+} from "@tanstack/react-table";
+import { BarChart3, Copy, Link2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { deleteUrl } from "@/lib/api";
+import { formatDate } from "@/lib/format";
+import type { ShortUrlDto } from "@/lib/types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+  },
+});
+
+const columnHelper = createColumnHelper<typeof features, ShortUrlDto>();
+
+async function copyShortUrl(url: string) {
+  await navigator.clipboard.writeText(url);
+  toast.success("Copied to clipboard");
+}
+
+export function UrlTable({
+  urls,
+  isPending,
+  isError,
+  errorMessage,
+  hasLinks,
+  hasActiveFilters,
+  onCreate,
+  onClearFilters,
+}: {
+  urls: ShortUrlDto[];
+  isPending: boolean;
+  isError: boolean;
+  errorMessage?: string;
+  hasLinks: boolean;
+  hasActiveFilters: boolean;
+  onCreate: () => void;
+  onClearFilters: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [pendingDelete, setPendingDelete] = useState<ShortUrlDto | null>(null);
+  const deleteMutation = useMutation({
+    mutationFn: deleteUrl,
+    onSuccess: () => {
+      toast.success("Short URL deleted");
+      setPendingDelete(null);
+      void queryClient.invalidateQueries({ queryKey: ["urls"] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const columns = useMemo(
+    () =>
+      columnHelper.columns([
+        columnHelper.accessor("full", {
+          header: "Full URL",
+          enableSorting: false,
+          cell: (info) => (
+            <a
+              href={info.getValue()}
+              className="block max-w-[220px] truncate text-primary underline-offset-4 hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {info.getValue()}
+            </a>
+          ),
+        }),
+        columnHelper.accessor("shortUrl", {
+          header: "Short URL",
+          enableSorting: false,
+          cell: (info) => (
+            <a
+              href={info.getValue()}
+              className="font-mono text-sm text-primary underline-offset-4 hover:underline"
+            >
+              {info.row.original.short}
+            </a>
+          ),
+        }),
+        columnHelper.accessor("clicks", {
+          header: "Clicks",
+          sortFn: "alphanumeric",
+        }),
+        columnHelper.accessor("expiresAt", {
+          header: "Expiry",
+          enableSorting: false,
+          cell: (info) => {
+            const row = info.row.original;
+            if (row.expired) {
+              return <Badge variant="destructive">Expired</Badge>;
+            }
+            if (!row.expiresAt) {
+              return <span className="text-muted-foreground">Never</span>;
+            }
+            return formatDate(row.expiresAt);
+          },
+        }),
+        columnHelper.display({
+          id: "actions",
+          header: "Actions",
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Copy short URL"
+                  onClick={() => {
+                    void copyShortUrl(row.shortUrl);
+                  }}
+                >
+                  <Copy />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="View stats"
+                  render={<Link href={`/stats/${row.short}`} />}
+                >
+                  <BarChart3 />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Delete short URL"
+                  onClick={() => setPendingDelete(row)}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            );
+          },
+        }),
+      ]),
+    []
+  );
+
+  const table = useTable({
+    features,
+    columns,
+    data: urls,
+    getRowId: (row) => row.id,
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Your saar.to links</CardTitle>
+        <CardDescription>
+          Sort by clicks. Copy, inspect stats, or delete a short URL.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isPending ? (
+          <p className="text-sm text-muted-foreground">Loading links…</p>
+        ) : isError ? (
+          <p className="text-sm text-destructive">
+            {errorMessage ?? "Could not load links"}
+          </p>
+        ) : !hasLinks ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <Link2 className="size-8 text-primary drop-shadow-[0_0_12px_rgb(249_208_38/0.55)]" />
+            <div className="space-y-1">
+              <p className="font-medium">No short URLs yet</p>
+              <p className="text-sm text-muted-foreground">
+                Create a saar.to link to start tracking clicks.
+              </p>
+            </div>
+            <Button type="button" className="rounded-full" onClick={onCreate}>
+              Create a new link
+            </Button>
+          </div>
+        ) : urls.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <div className="space-y-1">
+              <p className="font-medium">No links match these filters</p>
+              <p className="text-sm text-muted-foreground">
+                Try a different search or status.
+              </p>
+            </div>
+            {hasActiveFilters ? (
+              <Button type="button" variant="outline" onClick={onClearFilters}>
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    const canSort = header.column.getCanSort();
+                    return (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder ? null : canSort ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1"
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            <table.FlexRender header={header} />
+                            <span className="text-muted-foreground">
+                              {header.column.getIsSorted() === "asc"
+                                ? "↑"
+                                : header.column.getIsSorted() === "desc"
+                                  ? "↓"
+                                  : ""}
+                            </span>
+                          </button>
+                        ) : (
+                          <table.FlexRender header={header} />
+                        )}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getAllCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this short URL?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete
+                ? `${pendingDelete.short} will stop redirecting to ${pendingDelete.full}.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (pendingDelete) {
+                  deleteMutation.mutate(pendingDelete.id);
+                }
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
