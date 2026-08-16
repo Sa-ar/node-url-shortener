@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "create-user": "tsx --env-file=.env.local scripts/create-user.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -42,6 +43,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   },
   "description": "URL shortener with Next.js, MongoDB, and TanStack"
