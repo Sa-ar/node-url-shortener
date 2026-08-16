@@ -1,8 +1,10 @@
 import { compare } from "bcryptjs";
 import { getServerSession, type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import "@/lib/env";
 import { connectDB } from "@/lib/db";
-import { User } from "@/lib/models/user";
+import { User, type UserRole } from "@/lib/models/user";
+import { isOwnerRole } from "@/lib/roles";
 import { loginSchema } from "@/lib/validations/auth";
 
 export const authOptions: NextAuthOptions = {
@@ -37,10 +39,13 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const role: UserRole = user.role === "owner" ? "owner" : "member";
+
         return {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          role,
         };
       },
     }),
@@ -49,12 +54,14 @@ export const authOptions: NextAuthOptions = {
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.role = (user as { role?: UserRole }).role ?? "member";
       }
       return token;
     },
     session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id;
+        session.user.role = token.role === "owner" ? "owner" : "member";
       }
       return session;
     },
@@ -68,6 +75,22 @@ export function getSession() {
 export async function requireUserId() {
   const session = await getSession();
   if (!session?.user?.id) {
+    return null;
+  }
+  return session.user.id;
+}
+
+export async function requireSession() {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    return null;
+  }
+  return session;
+}
+
+export async function requireOwner() {
+  const session = await getSession();
+  if (!session?.user?.id || !isOwnerRole(session.user.role)) {
     return null;
   }
   return session.user.id;

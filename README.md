@@ -4,7 +4,8 @@ A URL shortener at [saar.to](https://saar.to), built with Next.js, MongoDB, TanS
 
 ## Features
 
-- Email/password accounts (sign up, sign in, sign out)
+- Invite-only accounts (owner bootstrapped via CLI; members register with a one-time link)
+- Email/password sign in and sign out
 - Filtered dashboard with link, click, active, and expired totals
 - Create a short link from a modal (`http://` or `https://` URL, optional slug and expiry)
 - Empty state on the links list that suggests creating a new link
@@ -54,27 +55,40 @@ Edit `.env.local`:
 
 Generate a secret with `openssl rand -base64 32`.
 
+### First owner account
+
+Public `/register` is closed. Create the owner locally (or against Atlas) with:
+
+```bash
+npm run create-user -- --name "Saar" --email you@example.com --password 'your-password'
+```
+
+Then sign in at `/login`. From the dashboard, use **Invite** to copy a one-time link (`/register?invite=…`, expires in 7 days).
+
 ## Scripts
 
 ```bash
-npm run dev      # development server at http://localhost:3000
-npm run build    # production build
-npm start        # serve the production build
-npm run lint     # ESLint
+npm run dev          # development server at http://localhost:3000
+npm run build        # production build
+npm start            # serve the production build
+npm run lint         # ESLint
+npm run create-user  # create an owner account (see above)
 ```
 
-Open `/register` to create an account, then `/` to shorten URLs.
+Open `/login` to sign in. Invitees open the invite URL you share.
 
 ## Routes
 
 | Path | Role |
 |------|------|
 | `/login` | Sign in |
-| `/register` | Create an account |
+| `/register?invite=…` | Create a member account (invite required) |
 | `/` | Dashboard: filtered stats, your short URLs, and a create-link modal |
-| `/stats/[code]` | Stats for a link you own |
+| `/stats/[code]` | Stats for a link you own (owner: any link) |
 | `/[code]` | Public redirect; 404 if missing or expired |
-| `POST /api/register` | Create an account |
+| `POST /api/register` | Create a member (requires valid invite) |
+| `GET`/`POST` `/api/invites` | Owner: list or create invites |
+| `DELETE /api/invites/[id]` | Owner: revoke an invite |
 | `GET /api/urls` | List the signed-in user's URLs |
 | `POST /api/urls` | Create a short URL (`fullUrl`, optional `slug`, optional `expiresAt`) |
 | `GET /api/urls/[id]` | Fetch one owned URL by Mongo id or short code |

@@ -18,13 +18,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-export function RegisterForm() {
+export function RegisterForm({ invite }: { invite: string }) {
   const router = useRouter();
   const form = useForm({
     defaultValues: {
       name: "",
       email: "",
       password: "",
+      invite,
     },
     validators: {
       onSubmit: registerSchema,
@@ -74,7 +75,7 @@ export function RegisterForm() {
         </p>
         <CardTitle className="font-heading text-3xl">Create account</CardTitle>
         <CardDescription>
-          Your saar.to links stay private to this account.
+          You were invited to manage your own saar.to links.
         </CardDescription>
       </CardHeader>
       <CardContent>

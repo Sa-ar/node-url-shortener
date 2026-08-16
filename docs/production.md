@@ -32,6 +32,24 @@ Set these in the Vercel project → Settings → Environment Variables (Producti
 
 Local `.env.local` may use `NEXTAUTH_URL=http://localhost:3000` and a local or Atlas URI. Never commit secrets.
 
+## Preview deployments
+
+Vercel creates a **Preview** deployment for every push to a non-production branch (and for pull requests).
+
+| Variable | Preview recommendation |
+|----------|------------------------|
+| `MONGODB_URI` | Same Atlas cluster, or a separate `url-shortener-preview` DB |
+| `NEXTAUTH_SECRET` | Same as production (or a dedicated preview secret) |
+| `NEXTAUTH_URL` | Leave **unset** — the app uses `VERCEL_URL` automatically |
+| `NEXT_PUBLIC_BASE_URL` | Leave **unset** on Preview so invite/short links use the preview host; keep `https://saar.to` on Production only |
+
+Production branch is `master`. Push a feature branch to get a URL like `https://saar-to-git-<branch>-….vercel.app`.
+
+```bash
+git push -u origin HEAD
+# then open the Preview URL from the Vercel dashboard or GitHub check
+```
+
 ## Atlas checklist
 
 1. Create a free **M0** cluster (region near you or near Vercel).
@@ -43,7 +61,7 @@ Local `.env.local` may use `NEXTAUTH_URL=http://localhost:3000` and a local or A
 ## Vercel checklist
 
 1. Import this GitHub repo into a Vercel project (Framework: Next.js).
-2. Set the four env vars above for Production (and Preview if you want preview logins).
+2. Set Production env vars as above. For Preview, set `MONGODB_URI` and `NEXTAUTH_SECRET`; leave `NEXTAUTH_URL` / `NEXT_PUBLIC_BASE_URL` unset (see Preview deployments).
 3. Deploy from `main` (or your default branch).
 4. Project → Domains → add `saar.to` (and `www` if you want a redirect).
 5. At the registrar, add the DNS records Vercel shows (usually A/ALIAS/CNAME).
@@ -51,10 +69,11 @@ Local `.env.local` may use `NEXTAUTH_URL=http://localhost:3000` and a local or A
 
 ## Smoke test after first deploy
 
-1. Open `https://saar.to/login` (or `/register` while public signup still exists).
-2. Create or sign in to an account.
+1. Create the owner with `npm run create-user` pointed at Atlas (`MONGODB_URI`).
+2. Open `https://saar.to/login` and sign in.
 3. Create a short link; confirm `https://saar.to/{code}` redirects.
-4. Confirm the link appears on the dashboard and stats page.
+4. Use **Invite** to copy a link; open it in a private window and register a member.
+5. Confirm `/register` without `?invite=` redirects to login.
 
 ## Local vs production
 
