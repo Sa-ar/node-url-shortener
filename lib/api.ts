@@ -39,3 +39,25 @@ export async function deleteUrl(id: string) {
   const response = await fetch(`/api/urls/${id}`, { method: "DELETE" });
   return parseJson<{ ok: true }>(response);
 }
+
+export type InviteDto = {
+  id: string;
+  url: string;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export async function fetchInvites() {
+  const response = await fetch("/api/invites");
+  return parseJson<InviteDto[]>(response);
+}
+
+export async function createInvite() {
+  const response = await fetch("/api/invites", { method: "POST" });
+  return parseJson<InviteDto>(response);
+}
+
+export async function revokeInvite(id: string) {
+  const response = await fetch(`/api/invites/${id}`, { method: "DELETE" });
+  return parseJson<{ ok: true }>(response);
+}

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireUserId } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { ShortUrl } from "@/lib/models/short-url";
+import { isOwnerRole } from "@/lib/roles";
 import {
   getBaseUrl,
   isDuplicateKeyError,
@@ -14,21 +15,24 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const userId = await requireUserId();
-  if (!userId) {
+  const session = await requireSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   await connectDB();
-  const docs = await ShortUrl.find({ userId }).sort({ createdAt: -1 });
+  const filter = isOwnerRole(session.user.role)
+    ? {}
+    : { userId: session.user.id };
+  const docs = await ShortUrl.find(filter).sort({ createdAt: -1 });
   const baseUrl = getBaseUrl(request);
 
   return NextResponse.json(docs.map((doc) => serializeShortUrl(doc, baseUrl)));
 }
 
 export async function POST(request: Request) {
-  const userId = await requireUserId();
-  if (!userId) {
+  const session = await requireSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -63,7 +67,7 @@ export async function POST(request: Request) {
 
   try {
     const doc = await ShortUrl.create({
-      userId,
+      userId: session.user.id,
       full: parsed.data.fullUrl,
       ...(parsed.data.slug ? { short: parsed.data.slug } : {}),
       expiresAt: parsed.data.expiresAt
