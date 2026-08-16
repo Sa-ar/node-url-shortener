@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireUserId } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import {
-  findOwnedShortUrl,
+  findAccessibleShortUrl,
   getBaseUrl,
   serializeShortUrl,
 } from "@/lib/urls";
@@ -15,14 +15,18 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const userId = await requireUserId();
-  if (!userId) {
+  const session = await requireSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await context.params;
   await connectDB();
-  const doc = await findOwnedShortUrl(id, userId);
+  const doc = await findAccessibleShortUrl(
+    id,
+    session.user.id,
+    session.user.role
+  );
 
   if (!doc) {
     return NextResponse.json({ error: "Short URL not found" }, { status: 404 });
@@ -32,14 +36,18 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
-  const userId = await requireUserId();
-  if (!userId) {
+  const session = await requireSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await context.params;
   await connectDB();
-  const doc = await findOwnedShortUrl(id, userId);
+  const doc = await findAccessibleShortUrl(
+    id,
+    session.user.id,
+    session.user.role
+  );
 
   if (!doc) {
     return NextResponse.json({ error: "Short URL not found" }, { status: 404 });

@@ -1,9 +1,12 @@
 import { model, models, Schema, type Model } from "mongoose";
 
+export type UserRole = "owner" | "member";
+
 export type UserAttrs = {
   name: string;
   email: string;
   passwordHash: string;
+  role: UserRole;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -19,6 +22,12 @@ const userSchema = new Schema<UserAttrs>(
       trim: true,
     },
     passwordHash: { type: String, required: true },
+    role: {
+      type: String,
+      enum: ["owner", "member"],
+      required: true,
+      default: "member",
+    },
   },
   { timestamps: true }
 );

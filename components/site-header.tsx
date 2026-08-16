@@ -24,14 +24,9 @@ export async function SiteHeader() {
             <SignOutButton />
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" render={<Link href="/login" />}>
-              Sign in
-            </Button>
-            <Button className="rounded-full" render={<Link href="/register" />}>
-              Create account
-            </Button>
-          </div>
+          <Button className="rounded-full" render={<Link href="/login" />}>
+            Sign in
+          </Button>
         )}
       </div>
     </header>
