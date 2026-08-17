@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 import { fetchUrl, isApiError } from "@/lib/api";
 import { formatDate, formatDay } from "@/lib/format";
 import { lastNDays } from "@/lib/dates";
@@ -15,7 +16,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const dailyClicksChartConfig = {
+  clicks: {
+    label: "Clicks",
+    color: "var(--chart-1)",
+  },
+} satisfies ChartConfig;
 
 export function UrlStats({ code }: { code: string }) {
   const query = useQuery({
@@ -106,7 +120,10 @@ export function UrlStats({ code }: { code: string }) {
   const url = query.data;
   const days = lastNDays(url.dailyClicks, 14);
   const totalRecent = days.reduce((sum, day) => sum + day.count, 0);
-  const maxClicks = Math.max(1, ...days.map((day) => day.count));
+  const chartData = days.map((day) => ({
+    date: day.date,
+    clicks: day.count,
+  }));
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
@@ -169,23 +186,39 @@ export function UrlStats({ code }: { code: string }) {
               description="Traffic in the last 14 days will show up here."
             />
           ) : (
-            <div className="flex h-40 items-end gap-1">
-              {days.map((day) => (
-                <div
-                  key={day.date}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-1"
-                >
-                  <div
-                    className="w-full rounded-sm bg-primary shadow-[0_0_10px_rgb(249_208_38/0.35)]"
-                    style={{ height: `${(day.count / maxClicks) * 100}%` }}
-                    title={`${day.date}: ${day.count}`}
-                  />
-                  <span className="text-[10px] text-muted-foreground">
-                    {formatDay(day.date)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <ChartContainer
+              config={dailyClicksChartConfig}
+              className="aspect-auto h-[200px] w-full"
+            >
+              <BarChart
+                accessibilityLayer
+                data={chartData}
+                margin={{ left: 8, right: 8 }}
+              >
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tickLine={false}
+                  tickMargin={10}
+                  axisLine={false}
+                  tickFormatter={(value) => formatDay(String(value))}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      indicator="line"
+                      labelFormatter={(value) => formatDay(String(value))}
+                    />
+                  }
+                />
+                <Bar
+                  dataKey="clicks"
+                  fill="var(--color-clicks)"
+                  radius={4}
+                />
+              </BarChart>
+            </ChartContainer>
           )}
         </CardContent>
       </Card>
