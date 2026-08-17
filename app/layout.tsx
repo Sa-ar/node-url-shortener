@@ -38,8 +38,10 @@ export default function RootLayout({
       className={`${display.variable} ${sans.variable} ${mono.variable} dark h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <SiteHeader />
-        <Providers>{children}</Providers>
+        <Providers>
+          <SiteHeader />
+          {children}
+        </Providers>
         <Analytics />
         <SpeedInsights />
       </body>

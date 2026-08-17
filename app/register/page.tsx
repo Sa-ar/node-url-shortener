@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { RegisterForm } from "@/components/register-form";
+import { PageShell } from "@/components/page-shell";
 import { connectDB } from "@/lib/db";
 import { findValidInvite } from "@/lib/invites";
 
@@ -22,8 +23,8 @@ export default async function RegisterPage({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-4 py-10">
+    <PageShell className="items-center justify-center">
       <RegisterForm invite={invite.trim()} />
-    </main>
+    </PageShell>
   );
 }

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+import { PAGE_CONTAINER_CLASS } from "@/components/page-shell";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
 
@@ -8,7 +10,12 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/70 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-4 px-4">
+      <div
+        className={cn(
+          PAGE_CONTAINER_CLASS,
+          "flex h-16 items-center justify-between gap-4"
+        )}
+      >
         <Link
           href={session ? "/" : "/login"}
           className="flex items-center gap-2.5 font-heading text-lg tracking-tight"

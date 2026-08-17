@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createUrl, updateUrl } from "@/lib/api";
 import { toDatetimeLocalValue } from "@/lib/format";
+import { upsertUrlInCache } from "@/lib/query";
 import type { ShortUrlDto } from "@/lib/types";
 import {
   createUrlSchema,
@@ -81,7 +82,7 @@ export function UrlForm({
       } else {
         toast.success("Short URL created", { description });
       }
-      void queryClient.invalidateQueries({ queryKey: ["urls"] });
+      upsertUrlInCache(queryClient, saved);
       onSaved?.();
     },
     onError: (error: Error) => {

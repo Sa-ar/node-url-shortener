@@ -3,11 +3,12 @@ import {
   CardContent,
   CardHeader,
 } from "@/components/ui/card";
+import { PageShell } from "@/components/page-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoginLoading() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-4 py-10">
+    <PageShell className="items-center justify-center">
       <Card className="w-full max-w-md">
         <CardHeader className="gap-3">
           <Skeleton className="h-3 w-16" />
@@ -20,6 +21,6 @@ export default function LoginLoading() {
           <Skeleton className="h-10 w-full rounded-full" />
         </CardContent>
       </Card>
-    </main>
+    </PageShell>
   );
 }

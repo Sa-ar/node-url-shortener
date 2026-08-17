@@ -3,11 +3,11 @@ import { requireSession } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { ShortUrl } from "@/lib/models/short-url";
 import { isOwnerRole } from "@/lib/roles";
+import { loadUrlList, revalidateUrlCaches } from "@/lib/url-data";
 import {
   getBaseUrl,
   isDuplicateKeyError,
   isMongooseValidationError,
-  listShortUrls,
   serializeShortUrl,
 } from "@/lib/urls";
 import { createUrlSchema } from "@/lib/validations/url";
@@ -22,14 +22,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await connectDB();
-  const filter = isOwnerRole(session.user.role)
-    ? {}
-    : { userId: session.user.id };
-  const docs = await listShortUrls(filter);
-  const baseUrl = getBaseUrl(request);
+  const urls = await loadUrlList(
+    session.user.id,
+    session.user.role,
+    getBaseUrl(request)
+  );
 
-  return NextResponse.json(docs.map((doc) => serializeShortUrl(doc, baseUrl)));
+  return NextResponse.json(urls);
 }
 
 export async function POST(request: Request) {
@@ -110,6 +109,7 @@ export async function POST(request: Request) {
     }
 
     const dto = serializeShortUrl(doc, getBaseUrl(request));
+    revalidateUrlCaches();
     return NextResponse.json(
       domainWarning ? { ...dto, domainWarning } : dto,
       { status: 201 }

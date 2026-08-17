@@ -1,22 +1,22 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { dehydrate, hydrate, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { QUERY_PERSIST_KEY } from "@/lib/query";
+import { makeQueryClient } from "@/lib/query-client";
 
-function makeQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000,
-        refetchOnWindowFocus: false,
-      },
-    },
-  });
+let browserQueryClient: ReturnType<typeof makeQueryClient> | undefined;
+let persistTimer: ReturnType<typeof setTimeout> | undefined;
+
+function persist(client: ReturnType<typeof makeQueryClient>) {
+  try {
+    sessionStorage.setItem(QUERY_PERSIST_KEY, JSON.stringify(dehydrate(client)));
+  } catch {
+    // Ignore quota / private-mode failures.
+  }
 }
-
-let browserQueryClient: QueryClient | undefined;
 
 function getQueryClient() {
   if (typeof window === "undefined") {
@@ -25,6 +25,25 @@ function getQueryClient() {
 
   if (!browserQueryClient) {
     browserQueryClient = makeQueryClient();
+    try {
+      const raw = sessionStorage.getItem(QUERY_PERSIST_KEY);
+      if (raw) {
+        hydrate(browserQueryClient, JSON.parse(raw) as Parameters<typeof hydrate>[1]);
+      }
+    } catch {
+      sessionStorage.removeItem(QUERY_PERSIST_KEY);
+    }
+
+    browserQueryClient.getQueryCache().subscribe(() => {
+      if (persistTimer) {
+        clearTimeout(persistTimer);
+      }
+      persistTimer = setTimeout(() => {
+        if (browserQueryClient) {
+          persist(browserQueryClient);
+        }
+      }, 250);
+    });
   }
 
   return browserQueryClient;
