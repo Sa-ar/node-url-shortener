@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ensureUserRoles } from "@/lib/roles";
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -36,5 +37,6 @@ export async function connectDB() {
   }
 
   cached.conn = await cached.promise;
+  await ensureUserRoles();
   return cached.conn;
 }
