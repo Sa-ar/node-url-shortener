@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { isExpired, utcDateString } from "@/lib/dates";
+import { vanityShortUrl } from "@/lib/hosts";
 import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
 import type { DailyClick, ShortUrlDto } from "@/lib/types";
 
@@ -22,15 +23,26 @@ export function getBaseUrl(request?: Request) {
   return "https://saar.to";
 }
 
+export function shortUrlKind(
+  doc: Pick<ShortUrlAttrs, "kind"> | { kind?: string | null }
+): "path" | "subdomain" {
+  return doc.kind === "subdomain" ? "subdomain" : "path";
+}
+
 export function serializeShortUrl(
   doc: ShortUrlAttrs & { _id: { toString(): string } },
   baseUrl: string
 ): ShortUrlDto {
+  const kind = shortUrlKind(doc);
   return {
     id: doc._id.toString(),
     full: doc.full,
     short: doc.short,
-    shortUrl: `${baseUrl}/${doc.short}`,
+    shortUrl:
+      kind === "subdomain"
+        ? vanityShortUrl(doc.short)
+        : `${baseUrl}/${doc.short}`,
+    kind,
     clicks: doc.clicks,
     expiresAt: doc.expiresAt ? new Date(doc.expiresAt).toISOString() : null,
     lastAccessedAt: doc.lastAccessedAt
