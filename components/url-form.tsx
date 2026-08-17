@@ -29,19 +29,27 @@ const apexHost =
   typeof window !== "undefined"
     ? (() => {
         try {
-          return (
-            process.env.NEXT_PUBLIC_BASE_URL
-              ? new URL(process.env.NEXT_PUBLIC_BASE_URL).hostname.replace(
-                  /^www\./i,
-                  ""
-                )
-              : "saar.to"
-          );
+          return process.env.NEXT_PUBLIC_BASE_URL
+            ? new URL(process.env.NEXT_PUBLIC_BASE_URL).hostname.replace(
+                /^www\./i,
+                ""
+              )
+            : "saar.to";
         } catch {
           return "saar.to";
         }
       })()
     : "saar.to";
+
+const LINK_ISSUE_PATHS = new Set([
+  "fullUrl",
+  "slug",
+  "kind",
+  "target",
+  "fileName",
+  "contentType",
+  "fileSource",
+]);
 
 function guessContentType(name: string) {
   const lower = name.toLowerCase();
@@ -85,6 +93,97 @@ type FormValues = {
   ogImageUrl: string;
 };
 
+type FormPane = "link" | "options";
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: {
+  value: T;
+  options: { value: T; label: string; mark?: boolean }[];
+  onChange: (value: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className="grid grid-cols-2 gap-2"
+    >
+      {options.map((option) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            className={`rounded-xl border px-3 py-2 text-sm ${
+              selected
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground"
+            }`}
+            onClick={() => onChange(option.value)}
+          >
+            <span className="inline-flex items-center justify-center gap-2">
+              {option.label}
+              {option.mark ? (
+                <span
+                  className="size-1.5 rounded-full bg-primary"
+                  aria-hidden
+                />
+              ) : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ToggleRow({
+  id,
+  label,
+  description,
+  checked,
+  onToggle,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-border/80 bg-muted/30 px-3 py-3">
+      <div className="space-y-1">
+        <Label htmlFor={id} className="text-sm">
+          {label}
+        </Label>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+          checked ? "bg-primary" : "bg-muted-foreground/30"
+        }`}
+        onClick={onToggle}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-background transition-transform ${
+            checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
 export function UrlForm({
   onSaved,
   isOwner = false,
@@ -98,6 +197,10 @@ export function UrlForm({
   const queryClient = useQueryClient();
   const schema = isEdit ? editUrlSchema : createUrlSchema;
   const [uploading, setUploading] = useState(false);
+  const [pane, setPane] = useState<FormPane>("link");
+  const [pasteFileUrl, setPasteFileUrl] = useState(
+    url?.fileSource === "external"
+  );
 
   const mutation = useMutation({
     mutationFn: async (value: FormValues) => {
@@ -168,11 +271,20 @@ export function UrlForm({
     onSubmit: async ({ value }) => {
       const parsed = schema.safeParse(value);
       if (!parsed.success) {
+        const hitLink = parsed.error.issues.some((issue) =>
+          LINK_ISSUE_PATHS.has(String(issue.path[0] ?? ""))
+        );
+        setPane(hitLink ? "link" : "options");
+        toast.error(
+          parsed.error.issues[0]?.message ?? "Check the form and try again"
+        );
         return;
       }
       await mutation.mutateAsync(value);
       if (!isEdit) {
         form.reset();
+        setPane("link");
+        setPasteFileUrl(false);
       }
     },
   });
@@ -181,6 +293,19 @@ export function UrlForm({
   const slug = useStore(form.store, (state) => state.values.slug);
   const target = useStore(form.store, (state) => state.values.target);
   const fileName = useStore(form.store, (state) => state.values.fileName);
+  const hasExtras = useStore(form.store, (state) => {
+    const values = state.values;
+    return Boolean(
+      values.note.trim() ||
+        values.password.trim() ||
+        values.ogTitle.trim() ||
+        values.ogDescription.trim() ||
+        values.ogImageUrl.trim() ||
+        values.expiresAt.trim() ||
+        values.removePassword ||
+        url?.hasPassword
+    );
+  });
   const isPremium = kind === "subdomain";
   const isFile = target === "file";
   const trimmedSlug = slug.trim();
@@ -191,6 +316,9 @@ export function UrlForm({
       ? `This ${isPremium ? "subdomain" : "slug"} is reserved`
       : undefined;
   const showPremiumToggle = isOwner && !isEdit;
+  const shortPreview = isPremium
+    ? `${previewSlug}.${apexHost}`
+    : `${apexHost}/${pathPreviewSlug}`;
 
   const applyExternalFileUrl = (value: string) => {
     form.setFieldValue("fullUrl", value);
@@ -210,9 +338,13 @@ export function UrlForm({
       });
       form.setFieldValue("fullUrl", blob.url);
       form.setFieldValue("fileName", file.name);
-      form.setFieldValue("contentType", file.type || guessContentType(file.name));
+      form.setFieldValue(
+        "contentType",
+        file.type || guessContentType(file.name)
+      );
       form.setFieldValue("fileSize", file.size);
       form.setFieldValue("fileSource", "blob");
+      setPasteFileUrl(false);
       toast.success("File uploaded", { description: file.name });
     } catch (error) {
       toast.error(
@@ -225,6 +357,20 @@ export function UrlForm({
     }
   };
 
+  const submitLabel = uploading
+    ? "Uploading…"
+    : mutation.isPending
+      ? isEdit
+        ? "Saving…"
+        : "Creating…"
+      : isEdit
+        ? "Save changes"
+        : isFile
+          ? "Create file link"
+          : isPremium
+            ? "Create premium link"
+            : "Shorten URL";
+
   return (
     <form
       className="grid gap-4"
@@ -234,111 +380,221 @@ export function UrlForm({
         void form.handleSubmit();
       }}
     >
-      {showPremiumToggle ? (
-        <form.Field name="kind">
-          {(field) => (
-            <div className="flex items-start justify-between gap-3 rounded-xl border border-border/80 bg-muted/30 px-3 py-3">
-              <div className="space-y-1">
-                <Label htmlFor="premium-toggle" className="text-sm">
-                  Premium subdomain
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Owner only · {previewSlug}.{apexHost}
-                </p>
-              </div>
-              <button
-                id="premium-toggle"
-                type="button"
-                role="switch"
-                aria-checked={field.state.value === "subdomain"}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  field.state.value === "subdomain"
-                    ? "bg-primary"
-                    : "bg-muted-foreground/30"
-                }`}
-                onClick={() => {
-                  field.handleChange(
-                    field.state.value === "subdomain" ? "path" : "subdomain"
-                  );
-                }}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-background transition-transform ${
-                    field.state.value === "subdomain"
-                      ? "translate-x-5"
-                      : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
-          )}
-        </form.Field>
-      ) : null}
+      <Segmented
+        ariaLabel="Form section"
+        value={pane}
+        onChange={setPane}
+        options={[
+          { value: "link", label: "Link" },
+          { value: "options", label: "Options", mark: hasExtras },
+        ]}
+      />
 
-      <form.Field name="target">
-        {(field) => (
-          <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                ["url", "URL"],
-                ["file", "File"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`rounded-xl border px-3 py-2 text-sm ${
-                  field.state.value === value
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground"
-                }`}
-                onClick={() => {
+      {pane === "link" ? (
+        <>
+          {showPremiumToggle ? (
+            <form.Field name="kind">
+              {(field) => (
+                <ToggleRow
+                  id="premium-toggle"
+                  label="Premium subdomain"
+                  description={`Owner only · ${previewSlug}.${apexHost}`}
+                  checked={field.state.value === "subdomain"}
+                  onToggle={() => {
+                    field.handleChange(
+                      field.state.value === "subdomain" ? "path" : "subdomain"
+                    );
+                  }}
+                />
+              )}
+            </form.Field>
+          ) : null}
+
+          <form.Field name="target">
+            {(field) => (
+              <Segmented
+                ariaLabel="Destination type"
+                value={field.state.value}
+                onChange={(value) => {
                   field.handleChange(value);
                   if (value === "url") {
                     form.setFieldValue("fileSource", "");
                     form.setFieldValue("fileName", "");
+                    setPasteFileUrl(false);
                   }
                 }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-      </form.Field>
+                options={[
+                  { value: "url", label: "URL" },
+                  { value: "file", label: "File" },
+                ]}
+              />
+            )}
+          </form.Field>
 
-      {isFile ? (
-        <>
-          <div className="grid gap-2 rounded-xl border border-dashed border-border px-3 py-4">
-            <Label htmlFor="file-upload" className="text-sm">
-              Upload file
-            </Label>
-            <Input
-              id="file-upload"
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-              disabled={uploading || mutation.isPending}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void uploadFile(file);
-                }
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {fileName
-                ? `Selected · ${fileName}`
-                : "PDF, images, zip, or Office · 15 MB max. Needs Blob token, or paste a URL below."}
-            </p>
-          </div>
+          {isFile ? (
+            <>
+              <div className="grid gap-2 rounded-xl border border-dashed border-border px-3 py-4">
+                <Label htmlFor="file-upload" className="text-sm">
+                  Upload file
+                </Label>
+                <Input
+                  id="file-upload"
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                  disabled={uploading || mutation.isPending}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      void uploadFile(file);
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {fileName
+                    ? `Selected · ${fileName}`
+                    : "PDF, images, zip, or Office · 15 MB max."}
+                </p>
+                {pasteFileUrl ? null : (
+                  <button
+                    type="button"
+                    className="justify-self-start text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    onClick={() => setPasteFileUrl(true)}
+                  >
+                    Paste a file URL instead
+                  </button>
+                )}
+              </div>
 
-          <form.Field name="fullUrl">
+              {pasteFileUrl ? (
+                <form.Field name="fullUrl">
+                  {(field) => (
+                    <FormField
+                      label="File URL"
+                      htmlFor={field.name}
+                      requirement="Required"
+                      hint="https://example.com/resume.pdf"
+                      error={
+                        field.state.meta.errors[0]
+                          ? formatFormError(field.state.meta.errors[0])
+                          : undefined
+                      }
+                    >
+                      <Input
+                        id={field.name}
+                        name={field.name}
+                        type="url"
+                        required
+                        placeholder="https://example.com/resume.pdf"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => {
+                          applyExternalFileUrl(event.target.value);
+                        }}
+                        aria-invalid={field.state.meta.errors.length > 0}
+                      />
+                    </FormField>
+                  )}
+                </form.Field>
+              ) : null}
+
+              <form.Field name="disposition">
+                {(field) => (
+                  <ToggleRow
+                    id="download-toggle"
+                    label="Download instead of opening"
+                    description={
+                      field.state.value === "attachment"
+                        ? "Visitors get a file download"
+                        : "Open in the browser when possible"
+                    }
+                    checked={field.state.value === "attachment"}
+                    onToggle={() => {
+                      field.handleChange(
+                        field.state.value === "attachment"
+                          ? "inline"
+                          : "attachment"
+                      );
+                    }}
+                  />
+                )}
+              </form.Field>
+            </>
+          ) : (
+            <form.Field name="fullUrl">
+              {(field) => (
+                <FormField
+                  label="Destination URL"
+                  htmlFor={field.name}
+                  requirement="Required"
+                  hint="https://example.com/very/long/path"
+                  error={
+                    field.state.meta.errors[0]
+                      ? formatFormError(field.state.meta.errors[0])
+                      : undefined
+                  }
+                >
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="url"
+                    required
+                    placeholder="https://example.com/very/long/path"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-invalid={field.state.meta.errors.length > 0}
+                  />
+                </FormField>
+              )}
+            </form.Field>
+          )}
+
+          <form.Field name="slug">
             {(field) => (
               <FormField
-                label="Or paste a file URL"
+                label={isPremium ? "Subdomain" : "Custom slug"}
                 htmlFor={field.name}
-                requirement="Required"
-                hint="https://example.com/resume.pdf"
+                requirement={isPremium ? "Required" : "Optional"}
+                hint={
+                  isPremium
+                    ? `Required · https://${previewSlug}.${apexHost}`
+                    : isEdit
+                      ? `${apexHost}/${pathPreviewSlug}`
+                      : `Optional · ${apexHost}/${pathPreviewSlug}`
+                }
+                error={
+                  field.state.meta.errors[0]
+                    ? formatFormError(field.state.meta.errors[0])
+                    : reservedHint
+                }
+              >
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  placeholder={isPremium ? "resume" : "my-link"}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  aria-invalid={
+                    field.state.meta.errors.length > 0 || Boolean(reservedHint)
+                  }
+                  required={isPremium || isEdit}
+                />
+              </FormField>
+            )}
+          </form.Field>
+        </>
+      ) : (
+        <>
+          <p className="font-mono text-xs text-muted-foreground">{shortPreview}</p>
+
+          <form.Field name="note">
+            {(field) => (
+              <FormField
+                label="Internal note"
+                htmlFor={field.name}
+                requirement="Optional"
+                hint="Only visible in the dashboard"
                 error={
                   field.state.meta.errors[0]
                     ? formatFormError(field.state.meta.errors[0])
@@ -348,294 +604,138 @@ export function UrlForm({
                 <Input
                   id={field.name}
                   name={field.name}
-                  type="url"
-                  required
-                  placeholder="https://example.com/resume.pdf"
+                  placeholder="Why this link exists"
+                  maxLength={500}
                   value={field.state.value}
                   onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    applyExternalFileUrl(event.target.value);
-                  }}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                />
+              </FormField>
+            )}
+          </form.Field>
+
+          <form.Field name="expiresAt">
+            {(field) => (
+              <FormField
+                label="Expires"
+                htmlFor={field.name}
+                requirement="Optional"
+                error={
+                  field.state.meta.errors[0]
+                    ? formatFormError(field.state.meta.errors[0])
+                    : undefined
+                }
+              >
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="datetime-local"
+                  className="min-w-0"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
                   aria-invalid={field.state.meta.errors.length > 0}
                 />
               </FormField>
             )}
           </form.Field>
 
-          <form.Field name="disposition">
+          <form.Field name="password">
             {(field) => (
-              <div className="flex items-start justify-between gap-3 rounded-xl border border-border/80 bg-muted/30 px-3 py-3">
-                <div className="space-y-1">
-                  <Label htmlFor="download-toggle" className="text-sm">
-                    Download instead of opening
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {field.state.value === "attachment"
-                      ? "Visitors get a file download"
-                      : "Open in the browser when possible"}
-                  </p>
-                </div>
-                <button
-                  id="download-toggle"
-                  type="button"
-                  role="switch"
-                  aria-checked={field.state.value === "attachment"}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    field.state.value === "attachment"
-                      ? "bg-primary"
-                      : "bg-muted-foreground/30"
-                  }`}
-                  onClick={() => {
-                    field.handleChange(
-                      field.state.value === "attachment" ? "inline" : "attachment"
-                    );
-                  }}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-background transition-transform ${
-                      field.state.value === "attachment"
-                        ? "translate-x-5"
-                        : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
+              <FormField
+                label="Password"
+                htmlFor={field.name}
+                requirement="Optional"
+                hint={
+                  url?.hasPassword
+                    ? "Leave blank to keep the current password"
+                    : "Visitors must enter this to open the link"
+                }
+              >
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="password"
+                  autoComplete="new-password"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                />
+              </FormField>
             )}
           </form.Field>
+
+          {url?.hasPassword ? (
+            <form.Field name="removePassword">
+              {(field) => (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={field.state.value}
+                    onChange={(event) =>
+                      field.handleChange(event.target.checked)
+                    }
+                  />
+                  Remove password
+                </label>
+              )}
+            </form.Field>
+          ) : null}
+
+          <div className="grid gap-3 rounded-xl border border-border/80 px-3 py-3">
+            <div className="space-y-1">
+              <p className="text-sm">Link preview</p>
+              <p className="text-xs text-muted-foreground">
+                Optional title, description, and image for Slack / iMessage
+              </p>
+            </div>
+            <form.Field name="ogTitle">
+              {(field) => (
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  placeholder="OG title"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                />
+              )}
+            </form.Field>
+            <form.Field name="ogDescription">
+              {(field) => (
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  placeholder="OG description"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                />
+              )}
+            </form.Field>
+            <form.Field name="ogImageUrl">
+              {(field) => (
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="url"
+                  placeholder="https://example.com/card.png"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                />
+              )}
+            </form.Field>
+          </div>
         </>
-      ) : (
-        <form.Field name="fullUrl">
-          {(field) => (
-            <FormField
-              label="Destination URL"
-              htmlFor={field.name}
-              requirement="Required"
-              hint="https://example.com/very/long/path"
-              error={
-                field.state.meta.errors[0]
-                  ? formatFormError(field.state.meta.errors[0])
-                  : undefined
-              }
-            >
-              <Input
-                id={field.name}
-                name={field.name}
-                type="url"
-                required
-                placeholder="https://example.com/very/long/path"
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                aria-invalid={field.state.meta.errors.length > 0}
-              />
-            </FormField>
-          )}
-        </form.Field>
       )}
-
-      <form.Field name="slug">
-        {(field) => (
-          <FormField
-            label={isPremium ? "Subdomain" : "Custom slug"}
-            htmlFor={field.name}
-            requirement={isPremium ? "Required" : "Optional"}
-            hint={
-              isPremium
-                ? `Required · https://${previewSlug}.${apexHost}`
-                : isEdit
-                  ? `${apexHost}/${pathPreviewSlug}`
-                  : `Optional · ${apexHost}/${pathPreviewSlug}`
-            }
-            error={
-              field.state.meta.errors[0]
-                ? formatFormError(field.state.meta.errors[0])
-                : reservedHint
-            }
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              placeholder={isPremium ? "resume" : "my-link"}
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              aria-invalid={
-                field.state.meta.errors.length > 0 || Boolean(reservedHint)
-              }
-              required={isPremium || isEdit}
-            />
-          </FormField>
-        )}
-      </form.Field>
-
-      <form.Field name="note">
-        {(field) => (
-          <FormField
-            label="Internal note"
-            htmlFor={field.name}
-            requirement="Optional"
-            hint="Only visible in the dashboard"
-            error={
-              field.state.meta.errors[0]
-                ? formatFormError(field.state.meta.errors[0])
-                : undefined
-            }
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              placeholder="Why this link exists"
-              maxLength={500}
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-            />
-          </FormField>
-        )}
-      </form.Field>
-
-      <form.Field name="ogTitle">
-        {(field) => (
-          <FormField
-            label="OG title"
-            htmlFor={field.name}
-            requirement="Optional"
-            hint="Shown when the link is shared"
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-            />
-          </FormField>
-        )}
-      </form.Field>
-
-      <form.Field name="ogDescription">
-        {(field) => (
-          <FormField
-            label="OG description"
-            htmlFor={field.name}
-            requirement="Optional"
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-            />
-          </FormField>
-        )}
-      </form.Field>
-
-      <form.Field name="ogImageUrl">
-        {(field) => (
-          <FormField
-            label="OG image URL"
-            htmlFor={field.name}
-            requirement="Optional"
-            hint="https image for Slack / iMessage unfurls"
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              type="url"
-              placeholder="https://example.com/card.png"
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-            />
-          </FormField>
-        )}
-      </form.Field>
-
-      <form.Field name="password">
-        {(field) => (
-          <FormField
-            label="Password"
-            htmlFor={field.name}
-            requirement="Optional"
-            hint={
-              url?.hasPassword
-                ? "Leave blank to keep the current password"
-                : "Visitors must enter this to open the link"
-            }
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              type="password"
-              autoComplete="new-password"
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-            />
-          </FormField>
-        )}
-      </form.Field>
-
-      {url?.hasPassword ? (
-        <form.Field name="removePassword">
-          {(field) => (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={field.state.value}
-                onChange={(event) => field.handleChange(event.target.checked)}
-              />
-              Remove password
-            </label>
-          )}
-        </form.Field>
-      ) : null}
-
-      <form.Field name="expiresAt">
-        {(field) => (
-          <FormField
-            label="Expires"
-            htmlFor={field.name}
-            requirement="Optional"
-            error={
-              field.state.meta.errors[0]
-                ? formatFormError(field.state.meta.errors[0])
-                : undefined
-            }
-          >
-            <Input
-              id={field.name}
-              name={field.name}
-              type="datetime-local"
-              className="min-w-0"
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              aria-invalid={field.state.meta.errors.length > 0}
-            />
-          </FormField>
-        )}
-      </form.Field>
 
       <Button
         type="submit"
         className="h-10 w-full rounded-full shadow-[0_0_24px_rgb(249_208_38/0.25)]"
         disabled={mutation.isPending || uploading}
       >
-        {uploading
-          ? "Uploading…"
-          : mutation.isPending
-            ? isEdit
-              ? "Saving…"
-              : "Creating…"
-            : isEdit
-              ? "Save changes"
-              : isFile
-                ? "Create file link"
-                : isPremium
-                  ? "Create premium link"
-                  : "Shorten URL"}
+        {submitLabel}
       </Button>
     </form>
   );
