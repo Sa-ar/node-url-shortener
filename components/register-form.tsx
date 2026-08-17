@@ -57,11 +57,12 @@ export function RegisterForm({ invite }: { invite: string }) {
       });
 
       if (!result || result.error) {
-        toast.error("Account created. Please sign in.");
+        toast.success("Account created. Please sign in.");
         router.push("/login");
         return;
       }
 
+      toast.success("Account created");
       router.push("/");
       router.refresh();
     },
