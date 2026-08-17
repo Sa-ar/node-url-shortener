@@ -6,7 +6,9 @@ import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 import { fetchUrl, isApiError } from "@/lib/api";
 import { formatDate, formatDay } from "@/lib/format";
 import { lastNDays } from "@/lib/dates";
+import { urlQueryKey } from "@/lib/query";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,20 +35,20 @@ const dailyClicksChartConfig = {
 
 export function UrlStats({ code }: { code: string }) {
   const query = useQuery({
-    queryKey: ["url", code],
+    queryKey: urlQueryKey(code),
     queryFn: () => fetchUrl(code),
   });
 
   if (query.isPending) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
+      <PageShell className="gap-6">
         <div className="space-y-3">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-10 w-40" />
           <Skeleton className="h-4 w-56" />
         </div>
         <LoadingState label="Loading stats…" className="py-8" />
-      </main>
+      </PageShell>
     );
   }
 
@@ -55,7 +57,7 @@ export function UrlStats({ code }: { code: string }) {
 
     if (notFound) {
       return (
-        <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-4 px-4 py-16 text-center">
+        <PageShell className="items-center justify-center gap-4 py-16 text-center">
           <p className="font-mono text-xs uppercase tracking-[0.22em] text-primary">
             saar.to
           </p>
@@ -68,12 +70,12 @@ export function UrlStats({ code }: { code: string }) {
           <Button className="rounded-full" render={<Link href="/" />}>
             Back to home
           </Button>
-        </main>
+        </PageShell>
       );
     }
 
     return (
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center px-4 py-16">
+      <PageShell className="items-center justify-center py-16">
         <ErrorState
           title="Could not load stats"
           message={
@@ -94,13 +96,13 @@ export function UrlStats({ code }: { code: string }) {
             </Button>
           }
         />
-      </main>
+      </PageShell>
     );
   }
 
   if (!query.data) {
     return (
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-4 px-4 py-16 text-center">
+      <PageShell className="items-center justify-center gap-4 py-16 text-center">
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-primary">
           saar.to
         </p>
@@ -113,7 +115,7 @@ export function UrlStats({ code }: { code: string }) {
         <Button className="rounded-full" render={<Link href="/" />}>
           Back to home
         </Button>
-      </main>
+      </PageShell>
     );
   }
 
@@ -126,7 +128,7 @@ export function UrlStats({ code }: { code: string }) {
   }));
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
+    <PageShell className="gap-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-3">
           <p className="font-mono text-xs uppercase tracking-[0.22em] text-primary">
@@ -222,7 +224,7 @@ export function UrlStats({ code }: { code: string }) {
           )}
         </CardContent>
       </Card>
-    </main>
+    </PageShell>
   );
 }
 

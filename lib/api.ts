@@ -32,12 +32,12 @@ async function parseJson<T>(response: Response): Promise<T> {
 }
 
 export async function fetchUrls() {
-  const response = await fetch("/api/urls");
+  const response = await fetch("/api/urls", { cache: "no-store" });
   return parseJson<ShortUrlDto[]>(response);
 }
 
 export async function fetchUrl(id: string) {
-  const response = await fetch(`/api/urls/${id}`);
+  const response = await fetch(`/api/urls/${id}`, { cache: "no-store" });
   return parseJson<ShortUrlDto>(response);
 }
 
@@ -72,7 +72,7 @@ export type InviteDto = {
 };
 
 export async function fetchInvites() {
-  const response = await fetch("/api/invites");
+  const response = await fetch("/api/invites", { cache: "no-store" });
   return parseJson<InviteDto[]>(response);
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
+import { loadUrl, revalidateUrlCaches } from "@/lib/url-data";
 import {
   findAccessibleShortUrl,
   getBaseUrl,
@@ -26,18 +27,18 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  await connectDB();
-  const doc = await findAccessibleShortUrl(
+  const url = await loadUrl(
     id,
     session.user.id,
-    session.user.role
+    session.user.role,
+    getBaseUrl(request)
   );
 
-  if (!doc) {
+  if (!url) {
     return NextResponse.json({ error: "Short URL not found" }, { status: 404 });
   }
 
-  return NextResponse.json(serializeShortUrl(doc, getBaseUrl(request)));
+  return NextResponse.json(url);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -124,6 +125,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const dto = serializeShortUrl(doc, getBaseUrl(request));
+  revalidateUrlCaches();
   return NextResponse.json(domainWarning ? { ...dto, domainWarning } : dto);
 }
 
@@ -153,5 +155,6 @@ export async function DELETE(_request: Request, context: RouteContext) {
     await removeVanityDomain(label);
   }
 
+  revalidateUrlCaches();
   return NextResponse.json({ ok: true });
 }

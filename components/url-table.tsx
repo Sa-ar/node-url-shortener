@@ -13,9 +13,10 @@ import {
 } from "@tanstack/react-table";
 import { BarChart3, Check, Copy, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { deleteUrl } from "@/lib/api";
+import { deleteUrl, fetchUrl } from "@/lib/api";
 import { isExpiringSoon } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
+import { removeUrlFromCache, urlQueryKey } from "@/lib/query";
 import type { ShortUrlDto } from "@/lib/types";
 import { EditUrlDialog } from "@/components/edit-url-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
@@ -88,10 +89,10 @@ export function UrlTable({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const deleteMutation = useMutation({
     mutationFn: deleteUrl,
-    onSuccess: () => {
+    onSuccess: (_result, id) => {
       toast.success("Short URL deleted");
       setPendingDelete(null);
-      void queryClient.invalidateQueries({ queryKey: ["urls"] });
+      removeUrlFromCache(queryClient, id);
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -215,6 +216,12 @@ export function UrlTable({
                   variant="ghost"
                   size="icon-sm"
                   aria-label="View stats"
+                  onPointerEnter={() => {
+                    void queryClient.prefetchQuery({
+                      queryKey: urlQueryKey(row.id),
+                      queryFn: () => fetchUrl(row.id),
+                    });
+                  }}
                   render={<Link href={`/stats/${row.id}`} />}
                 >
                   <BarChart3 />

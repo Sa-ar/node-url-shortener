@@ -8,8 +8,10 @@ import {
   filterUrls,
   type LinkStatusFilter,
 } from "@/lib/dashboard";
+import { urlsQueryKey } from "@/lib/query";
 import { CreateUrlDialog } from "@/components/create-url-dialog";
 import { InviteDialog } from "@/components/invite-dialog";
+import { PageShell } from "@/components/page-shell";
 import { UrlOverview } from "@/components/url-overview";
 import { UrlTable } from "@/components/url-table";
 import { Button } from "@/components/ui/button";
@@ -27,7 +29,7 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<LinkStatusFilter>("all");
   const query = useQuery({
-    queryKey: ["urls"],
+    queryKey: urlsQueryKey,
     queryFn: fetchUrls,
   });
 
@@ -39,7 +41,7 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
   const hasActiveFilters = search.trim() !== "" || status !== "all";
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-10">
+    <PageShell className="gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-3">
           <p className="font-mono text-xs uppercase tracking-[0.22em] text-primary">
@@ -123,6 +125,6 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         onOpenChange={setCreateOpen}
         isOwner={isOwner}
       />
-    </main>
+    </PageShell>
   );
 }

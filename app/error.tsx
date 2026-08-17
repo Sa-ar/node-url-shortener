@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { ErrorState } from "@/components/query-state";
+import { PageShell } from "@/components/page-shell";
 
 export default function Error({
   error,
@@ -15,12 +16,12 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 items-center justify-center px-4 py-16">
+    <PageShell className="items-center justify-center py-16">
       <ErrorState
         title="Something went wrong"
         message={error.message || "An unexpected error occurred."}
         onRetry={reset}
       />
-    </main>
+    </PageShell>
   );
 }
