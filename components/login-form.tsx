@@ -44,6 +44,7 @@ export function LoginForm() {
         return;
       }
 
+      toast.success("Signed in");
       router.push("/");
       router.refresh();
     },
