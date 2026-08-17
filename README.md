@@ -57,13 +57,18 @@ Generate a secret with `openssl rand -base64 32`.
 
 ### First owner account
 
-Public `/register` is closed. Create the owner locally (or against Atlas) with:
+Public `/register` is closed. Create the owner with:
 
 ```bash
+# local Mongo (.env.local)
 npm run create-user -- --name "Saar" --email you@example.com --password 'your-password'
+
+# production Atlas (.env.prod from Vercel)
+npm run env:pull-prod
+npm run create-user -- --name "Saar" --email you@example.com --password 'your-password' --target production
 ```
 
-Then sign in at `/login`. From the dashboard, use **Invite** to copy a one-time link (`/register?invite=…`, expires in 7 days).
+Then sign in at `/login` (or `https://saar.to/login` for production). From the dashboard, use **Invite** to copy a one-time link (`/register?invite=…`, expires in 7 days).
 
 ## Scripts
 
@@ -72,7 +77,8 @@ npm run dev          # development server at http://localhost:3000
 npm run build        # production build
 npm start            # serve the production build
 npm run lint         # ESLint
-npm run create-user  # create an owner account (see above)
+npm run create-user     # create an owner account (see above)
+npm run env:pull-prod   # write Vercel production env to .env.prod
 ```
 
 Open `/login` to sign in. Invitees open the invite URL you share.
