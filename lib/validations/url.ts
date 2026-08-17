@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isAllowedFileType, mustForceAttachment } from "@/lib/files";
+import { isAllowedFileType, mustForceAttachment } from "@/lib/file-types";
 
 /**
  * First-path segments the app serves itself (see `proxy.ts` and the `app/`

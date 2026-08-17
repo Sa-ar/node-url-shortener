@@ -2,57 +2,20 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { del } from "@vercel/blob";
 import { NextResponse } from "next/server";
+import {
+  MAX_FILE_BYTES,
+  normalizeDisposition,
+} from "@/lib/file-types";
 import type { ShortUrlAttrs } from "@/lib/models/short-url";
+import type { FileDisposition, FileSource } from "@/lib/types";
 
-export const MAX_FILE_BYTES = 15 * 1024 * 1024;
-
-export const ALLOWED_FILE_TYPES = [
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-  "application/zip",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/msword",
-  "application/vnd.ms-excel",
-  "application/vnd.ms-powerpoint",
-] as const;
-
-const NEVER_INLINE = new Set([
-  "text/html",
-  "application/javascript",
-  "text/javascript",
-  "image/svg+xml",
-  "text/xml",
-  "application/xml",
-  "application/xhtml+xml",
-]);
-
-export type FileDisposition = "inline" | "attachment";
-export type FileSource = "blob" | "external";
-
-export function isAllowedFileType(contentType: string) {
-  const type = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
-  return (ALLOWED_FILE_TYPES as readonly string[]).includes(type);
-}
-
-export function mustForceAttachment(contentType: string) {
-  const type = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
-  return NEVER_INLINE.has(type);
-}
-
-export function normalizeDisposition(
-  disposition: FileDisposition | undefined,
-  contentType: string
-): FileDisposition {
-  if (mustForceAttachment(contentType)) {
-    return "attachment";
-  }
-  return disposition === "attachment" ? "attachment" : "inline";
-}
+export {
+  ALLOWED_FILE_TYPES,
+  MAX_FILE_BYTES,
+  isAllowedFileType,
+  mustForceAttachment,
+  normalizeDisposition,
+} from "@/lib/file-types";
 
 function contentDispositionHeader(disposition: FileDisposition, fileName: string) {
   const fallback = fileName.replace(/["\\\r\n]/g, "_") || "download";
