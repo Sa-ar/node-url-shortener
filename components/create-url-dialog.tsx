@@ -25,8 +25,8 @@ export function CreateUrlDialog({
           <DialogTitle>Create a saar.to link</DialogTitle>
           <DialogDescription>
             {isOwner
-              ? "Paste a destination. Use a custom slug for saar.to/slug, or Premium for slug.saar.to."
-              : "Paste a destination. An optional slug becomes saar.to/your-slug."}
+              ? "Paste a destination or attach a file. Use a custom slug for saar.to/slug, or Premium for slug.saar.to."
+              : "Paste a destination or attach a file. An optional slug becomes saar.to/your-slug."}
           </DialogDescription>
         </DialogHeader>
         {open ? (

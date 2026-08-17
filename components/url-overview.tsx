@@ -1,5 +1,4 @@
-import { summarizeUrls } from "@/lib/dashboard";
-import type { ShortUrlDto } from "@/lib/types";
+import type { StatsOverviewDto } from "@/lib/types";
 import {
   Card,
   CardDescription,
@@ -9,13 +8,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function UrlOverview({
-  urls,
+  overview,
   isPending = false,
 }: {
-  urls: ShortUrlDto[];
+  overview?: StatsOverviewDto;
   isPending?: boolean;
 }) {
-  if (isPending) {
+  if (isPending || !overview) {
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
@@ -30,14 +29,12 @@ export function UrlOverview({
     );
   }
 
-  const stats = summarizeUrls(urls);
-
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <StatCard label="Links" value={stats.links} />
-      <StatCard label="Clicks" value={stats.clicks} />
-      <StatCard label="Active" value={stats.active} />
-      <StatCard label="Expired" value={stats.expired} />
+      <StatCard label="Links" value={overview.links} />
+      <StatCard label="Clicks" value={overview.clicks} />
+      <StatCard label="Unique visitors" value={overview.uniqueVisitors} />
+      <StatCard label="Active" value={overview.active} />
     </div>
   );
 }

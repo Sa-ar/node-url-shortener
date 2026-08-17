@@ -7,6 +7,7 @@
 - Prioritize rich click/visit analytics (per-hit detail, uniques, bot filtering) over minimal click counters alone.
 - Prefer explicit loading, error, success, and empty states across dashboard, stats, auth, and invite flows (including route-level loading/error UI).
 - Treat the GitHub repo as public: never commit PII, doxxing material, or secrets, including in git history.
+- Keep app pages on the same content width as the header; dialogs can stay narrower.
 
 ## Learned Workspace Facts
 
@@ -15,7 +16,8 @@
 - Production stack decision: Vercel Hobby for the app, MongoDB Atlas M0 for the database; details live in `docs/production.md`.
 - Local auth uses `NEXTAUTH_URL=http://localhost:3000`; production uses `https://saar.to`; preview leaves `NEXTAUTH_URL` unset and uses `VERCEL_URL`.
 - Production and Preview both need `NEXTAUTH_SECRET` and `MONGODB_URI` on Vercel; never commit `.env.local` or secrets.
-- Owner-invite access and ClickEvent analytics are specified in `docs/superpowers/specs/2026-08-16-owner-invites-click-analytics-design.md` and are not required for the first production deploy.
+- Owner invites, auth, vanity `slug.saar.to` redirects, ClickEvent analytics, file destinations, QR/notes, and OG/password gates are shipped.
+- Do not build a registrar DNS panel or mixed-record subdomain manager into saar.to; DNS for other domains stays at the registrar (Cloudflare nameservers if they want easier DNS UX).
 - Owners are bootstrapped only via CLI (`npm run create-user`); public registration is invite-only for members; owners see all links/clicks, members only their own.
 - Keep apex `saar.to` as the primary Vercel domain (avoid forcing traffic to `www`).
 - Atlas Network Access must allow Vercel Hobby egress (`0.0.0.0/0` on M0) or sign-in and redirects fail; scope the Vercel DB user to `readWrite` on `url-shortener` only and IP-restrict any admin/CLI Atlas user.

@@ -11,6 +11,8 @@ import {
   serializeShortUrl,
 } from "@/lib/urls";
 import { createUrlSchema } from "@/lib/validations/url";
+import { assignFileTarget } from "@/lib/files";
+import { hashLinkPassword } from "@/lib/link-gate";
 import { ensureVanityDomain } from "@/lib/vercel-domains";
 
 export const runtime = "nodejs";
@@ -49,21 +51,27 @@ export async function POST(request: Request) {
     body && typeof body === "object" && "kind" in body
       ? String((body as { kind: unknown }).kind ?? "path")
       : "path";
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
   const parsed = createUrlSchema.safeParse({
-    fullUrl:
-      body && typeof body === "object" && "fullUrl" in body
-        ? (body as { fullUrl: unknown }).fullUrl
-        : undefined,
-    slug:
-      body && typeof body === "object" && "slug" in body
-        ? String((body as { slug: unknown }).slug ?? "")
-        : "",
-    expiresAt:
-      body && typeof body === "object" && "expiresAt" in body
-        ? String((body as { expiresAt: unknown }).expiresAt ?? "")
-        : "",
+    fullUrl: record.fullUrl,
+    slug: String(record.slug ?? ""),
+    expiresAt: String(record.expiresAt ?? ""),
     kind: kindRaw === "subdomain" ? "subdomain" : "path",
+    target: record.target === "file" ? "file" : "url",
+    disposition: record.disposition === "attachment" ? "attachment" : "inline",
+    fileName: String(record.fileName ?? ""),
+    contentType: String(record.contentType ?? ""),
+    fileSize: typeof record.fileSize === "number" ? record.fileSize : undefined,
+    fileSource:
+      record.fileSource === "blob" || record.fileSource === "external"
+        ? record.fileSource
+        : undefined,
+    note: String(record.note ?? ""),
+    password: String(record.password ?? ""),
+    ogTitle: String(record.ogTitle ?? ""),
+    ogDescription: String(record.ogDescription ?? ""),
+    ogImageUrl: String(record.ogImageUrl ?? ""),
   });
   if (!parsed.success) {
     const message = parsed.error.issues[0]?.message ?? "Invalid input";
@@ -91,11 +99,23 @@ export async function POST(request: Request) {
       userId: session.user.id,
       full: parsed.data.fullUrl,
       kind: parsed.data.kind,
+      target: parsed.data.target,
       ...(parsed.data.slug ? { short: parsed.data.slug } : {}),
       expiresAt: parsed.data.expiresAt
         ? new Date(parsed.data.expiresAt)
         : null,
     });
+    assignFileTarget(doc, parsed.data);
+    if (parsed.data.note) {
+      doc.note = parsed.data.note;
+    }
+    doc.ogTitle = parsed.data.ogTitle ?? null;
+    doc.ogDescription = parsed.data.ogDescription ?? null;
+    doc.ogImageUrl = parsed.data.ogImageUrl ?? null;
+    if (parsed.data.password) {
+      doc.passwordHash = await hashLinkPassword(parsed.data.password);
+    }
+    await doc.save();
 
     let domainWarning: string | undefined;
     if (parsed.data.kind === "subdomain" && parsed.data.slug) {
