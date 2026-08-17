@@ -3,13 +3,14 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { fetchUrls } from "@/lib/api";
+import { fetchStatsOverview, fetchUrls } from "@/lib/api";
 import {
   filterUrls,
   type LinkStatusFilter,
 } from "@/lib/dashboard";
 import { urlsQueryKey } from "@/lib/query";
 import { CreateUrlDialog } from "@/components/create-url-dialog";
+import { HideBotsToggle } from "@/components/hide-bots-toggle";
 import { InviteDialog } from "@/components/invite-dialog";
 import { PageShell } from "@/components/page-shell";
 import { UrlOverview } from "@/components/url-overview";
@@ -28,9 +29,14 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<LinkStatusFilter>("all");
+  const [hideBots, setHideBots] = useState(false);
   const query = useQuery({
     queryKey: urlsQueryKey,
     queryFn: fetchUrls,
+  });
+  const overviewQuery = useQuery({
+    queryKey: ["stats-overview", hideBots],
+    queryFn: () => fetchStatsOverview(hideBots),
   });
 
   const allUrls = useMemo(() => query.data ?? [], [query.data]);
@@ -70,7 +76,7 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -95,9 +101,15 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
             <SelectItem value="expired">Expired</SelectItem>
           </SelectContent>
         </Select>
+        <div className="lg:ml-auto lg:w-72">
+          <HideBotsToggle checked={hideBots} onCheckedChange={setHideBots} />
+        </div>
       </div>
 
-      <UrlOverview urls={filteredUrls} isPending={query.isPending} />
+      <UrlOverview
+        overview={overviewQuery.data}
+        isPending={overviewQuery.isPending}
+      />
 
       <UrlTable
         urls={filteredUrls}
