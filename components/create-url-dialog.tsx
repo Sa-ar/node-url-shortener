@@ -32,7 +32,7 @@ export function CreateUrlDialog({
         {open ? (
           <UrlForm
             isOwner={isOwner}
-            onCreated={() => {
+            onSaved={() => {
               onOpenChange(false);
             }}
           />

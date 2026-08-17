@@ -12,6 +12,22 @@ export function isExpired(expiresAt?: Date | string | null) {
   return new Date(expiresAt).getTime() <= Date.now();
 }
 
+const EXPIRING_SOON_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** True when a link has an expiry within the next 24h (and hasn't expired). */
+export function isExpiringSoon(
+  expiresAt?: Date | string | null,
+  windowMs = EXPIRING_SOON_WINDOW_MS
+) {
+  if (!expiresAt) {
+    return false;
+  }
+
+  const time = new Date(expiresAt).getTime();
+  const now = Date.now();
+  return time > now && time - now <= windowMs;
+}
+
 export function lastNDays(dailyClicks: DailyClick[], days = 14) {
   const counts = new Map(dailyClicks.map((entry) => [entry.date, entry.count]));
   const result: DailyClick[] = [];

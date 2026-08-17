@@ -11,11 +11,13 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { BarChart3, Copy, Link2, Trash2 } from "lucide-react";
+import { BarChart3, Check, Copy, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteUrl } from "@/lib/api";
+import { isExpiringSoon } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import type { ShortUrlDto } from "@/lib/types";
+import { EditUrlDialog } from "@/components/edit-url-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import {
   AlertDialog,
@@ -55,15 +57,6 @@ const features = tableFeatures({
 
 const columnHelper = createColumnHelper<typeof features, ShortUrlDto>();
 
-async function copyShortUrl(url: string) {
-  try {
-    await navigator.clipboard.writeText(url);
-    toast.success("Copied to clipboard");
-  } catch {
-    toast.error("Could not copy to clipboard");
-  }
-}
-
 export function UrlTable({
   urls,
   isPending,
@@ -71,6 +64,8 @@ export function UrlTable({
   errorMessage,
   hasLinks,
   hasActiveFilters,
+  totalCount,
+  isOwner = false,
   onRetry,
   onCreate,
   onClearFilters,
@@ -81,12 +76,16 @@ export function UrlTable({
   errorMessage?: string;
   hasLinks: boolean;
   hasActiveFilters: boolean;
+  totalCount: number;
+  isOwner?: boolean;
   onRetry?: () => void;
   onCreate: () => void;
   onClearFilters: () => void;
 }) {
   const queryClient = useQueryClient();
   const [pendingDelete, setPendingDelete] = useState<ShortUrlDto | null>(null);
+  const [editing, setEditing] = useState<ShortUrlDto | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const deleteMutation = useMutation({
     mutationFn: deleteUrl,
     onSuccess: () => {
@@ -98,6 +97,19 @@ export function UrlTable({
       toast.error(error.message);
     },
   });
+
+  const copyShortUrl = async (row: ShortUrlDto) => {
+    try {
+      await navigator.clipboard.writeText(row.shortUrl);
+      setCopiedId(row.id);
+      toast.success("Copied to clipboard", { description: row.shortUrl });
+      window.setTimeout(() => {
+        setCopiedId((current) => (current === row.id ? null : current));
+      }, 1500);
+    } catch {
+      toast.error("Could not copy to clipboard");
+    }
+  };
 
   const columns = useMemo(
     () =>
@@ -155,7 +167,19 @@ export function UrlTable({
             if (!row.expiresAt) {
               return <span className="text-muted-foreground">Never</span>;
             }
-            return formatDate(row.expiresAt);
+            return (
+              <div className="flex flex-col items-start gap-1">
+                <span>{formatDate(row.expiresAt)}</span>
+                {isExpiringSoon(row.expiresAt) ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/50 text-amber-500"
+                  >
+                    Expiring soon
+                  </Badge>
+                ) : null}
+              </div>
+            );
           },
         }),
         columnHelper.display({
@@ -163,18 +187,28 @@ export function UrlTable({
           header: "Actions",
           cell: (info) => {
             const row = info.row.original;
+            const copied = copiedId === row.id;
             return (
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Copy short URL"
+                  aria-label={copied ? "Copied" : "Copy short URL"}
                   onClick={() => {
-                    void copyShortUrl(row.shortUrl);
+                    void copyShortUrl(row);
                   }}
                 >
-                  <Copy />
+                  {copied ? <Check className="text-primary" /> : <Copy />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Edit short URL"
+                  onClick={() => setEditing(row)}
+                >
+                  <Pencil />
                 </Button>
                 <Button
                   type="button"
@@ -199,7 +233,7 @@ export function UrlTable({
           },
         }),
       ]),
-    []
+    [copiedId]
   );
 
   const table = useTable({
@@ -209,12 +243,17 @@ export function UrlTable({
     getRowId: (row) => row.id,
   });
 
+  const showingCount = hasActiveFilters
+    ? `Showing ${urls.length} of ${totalCount} links.`
+    : `${totalCount} ${totalCount === 1 ? "link" : "links"}.`;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Your saar.to links</CardTitle>
         <CardDescription>
-          Sort by clicks. Copy, inspect stats, or delete a short URL.
+          {hasLinks ? `${showingCount} ` : ""}
+          Sort by clicks. Copy, edit, inspect stats, or delete a short URL.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -298,6 +337,16 @@ export function UrlTable({
           </Table>
         )}
       </CardContent>
+
+      <EditUrlDialog
+        url={editing}
+        isOwner={isOwner}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditing(null);
+          }
+        }}
+      />
 
       <AlertDialog
         open={pendingDelete !== null}

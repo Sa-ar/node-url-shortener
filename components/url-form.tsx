@@ -3,8 +3,15 @@
 import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { createUrl } from "@/lib/api";
-import { formatFormError, createUrlSchema } from "@/lib/validations/url";
+import { createUrl, updateUrl } from "@/lib/api";
+import { toDatetimeLocalValue } from "@/lib/format";
+import type { ShortUrlDto } from "@/lib/types";
+import {
+  createUrlSchema,
+  editUrlSchema,
+  formatFormError,
+  isReservedSlug,
+} from "@/lib/validations/url";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,28 +36,53 @@ const apexHost =
     : "saar.to";
 
 export function UrlForm({
-  onCreated,
+  onSaved,
   isOwner = false,
+  url,
 }: {
-  onCreated?: () => void;
+  onSaved?: () => void;
   isOwner?: boolean;
+  /** When provided, the form edits this link instead of creating a new one. */
+  url?: ShortUrlDto;
 }) {
+  const isEdit = Boolean(url);
   const queryClient = useQueryClient();
+  const schema = isEdit ? editUrlSchema : createUrlSchema;
+
   const mutation = useMutation({
-    mutationFn: createUrl,
-    onSuccess: (url) => {
-      if (url.domainWarning) {
-        toast.success("Premium link created", {
-          description: `${url.shortUrl} · ${url.domainWarning}`,
+    mutationFn: async (value: {
+      fullUrl: string;
+      slug: string;
+      expiresAt: string;
+      kind: "path" | "subdomain";
+    }) => {
+      if (url) {
+        return updateUrl(url.id, {
+          fullUrl: value.fullUrl,
+          slug: value.slug,
+          expiresAt: value.expiresAt,
         });
+      }
+      return createUrl({
+        fullUrl: value.fullUrl,
+        slug: value.slug,
+        expiresAt: value.expiresAt,
+        kind: value.kind,
+      });
+    },
+    onSuccess: (saved) => {
+      const description = saved.domainWarning
+        ? `${saved.shortUrl} · ${saved.domainWarning}`
+        : saved.shortUrl;
+      if (isEdit) {
+        toast.success("Link updated", { description });
+      } else if (saved.kind === "subdomain") {
+        toast.success("Premium link created", { description });
       } else {
-        toast.success(
-          url.kind === "subdomain" ? "Premium link created" : "Short URL created",
-          { description: url.shortUrl }
-        );
+        toast.success("Short URL created", { description });
       }
       void queryClient.invalidateQueries({ queryKey: ["urls"] });
-      onCreated?.();
+      onSaved?.();
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -59,34 +91,47 @@ export function UrlForm({
 
   const form = useForm({
     defaultValues: {
-      fullUrl: "",
-      slug: "",
-      expiresAt: "",
-      kind: "path" as "path" | "subdomain",
+      fullUrl: url?.full ?? "",
+      slug: url?.short ?? "",
+      expiresAt: url ? toDatetimeLocalValue(url.expiresAt) : "",
+      kind: url?.kind ?? ("path" as "path" | "subdomain"),
     },
     validators: {
-      onSubmit: createUrlSchema,
+      onSubmit: schema,
     },
     onSubmit: async ({ value }) => {
-      const parsed = createUrlSchema.safeParse(value);
+      const parsed = schema.safeParse(value);
       if (!parsed.success) {
         return;
       }
 
       await mutation.mutateAsync({
         fullUrl: parsed.data.fullUrl,
-        slug: parsed.data.slug,
-        expiresAt: parsed.data.expiresAt,
+        slug: parsed.data.slug ?? "",
+        expiresAt: parsed.data.expiresAt ?? "",
         kind: parsed.data.kind,
       });
-      form.reset();
+
+      if (!isEdit) {
+        form.reset();
+      }
     },
   });
 
   const kind = useStore(form.store, (state) => state.values.kind);
   const slug = useStore(form.store, (state) => state.values.slug);
   const isPremium = kind === "subdomain";
-  const previewSlug = slug.trim().toLowerCase() || "your-subdomain";
+  const trimmedSlug = slug.trim();
+  const previewSlug = trimmedSlug.toLowerCase() || "your-subdomain";
+  const pathPreviewSlug = trimmedSlug || "your-slug";
+  // Proactive hint so a reserved path is flagged before submitting.
+  const reservedHint =
+    trimmedSlug !== "" && isReservedSlug(trimmedSlug)
+      ? `This ${isPremium ? "subdomain" : "slug"} is reserved`
+      : undefined;
+
+  // Only owners may toggle premium, and only when creating (kind is immutable on edit).
+  const showPremiumToggle = isOwner && !isEdit;
 
   return (
     <form
@@ -97,7 +142,7 @@ export function UrlForm({
         void form.handleSubmit();
       }}
     >
-      {isOwner ? (
+      {showPremiumToggle ? (
         <form.Field name="kind">
           {(field) => (
             <div className="flex items-start justify-between gap-3 rounded-xl border border-border/80 bg-muted/30 px-3 py-3">
@@ -174,13 +219,15 @@ export function UrlForm({
             requirement={isPremium ? "Required" : "Optional"}
             hint={
               isPremium
-                ? `https://${previewSlug}.${apexHost}`
-                : "3–32 chars · letters, numbers, _ or -"
+                ? `Required · https://${previewSlug}.${apexHost}`
+                : isEdit
+                  ? `${apexHost}/${pathPreviewSlug}`
+                  : `Optional · ${apexHost}/${pathPreviewSlug}`
             }
             error={
               field.state.meta.errors[0]
                 ? formatFormError(field.state.meta.errors[0])
-                : undefined
+                : reservedHint
             }
           >
             <Input
@@ -190,8 +237,10 @@ export function UrlForm({
               value={field.state.value}
               onBlur={field.handleBlur}
               onChange={(event) => field.handleChange(event.target.value)}
-              aria-invalid={field.state.meta.errors.length > 0}
-              required={isPremium}
+              aria-invalid={
+                field.state.meta.errors.length > 0 || Boolean(reservedHint)
+              }
+              required={isPremium || isEdit}
             />
           </FormField>
         )}
@@ -229,10 +278,14 @@ export function UrlForm({
         disabled={mutation.isPending}
       >
         {mutation.isPending
-          ? "Creating…"
-          : isPremium
-            ? "Create premium link"
-            : "Shorten URL"}
+          ? isEdit
+            ? "Saving…"
+            : "Creating…"
+          : isEdit
+            ? "Save changes"
+            : isPremium
+              ? "Create premium link"
+              : "Shorten URL"}
       </Button>
     </form>
   );

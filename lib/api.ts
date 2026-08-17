@@ -1,4 +1,4 @@
-import type { CreateUrlBody, ShortUrlDto } from "@/lib/types";
+import type { CreateUrlBody, ShortUrlDto, UpdateUrlBody } from "@/lib/types";
 
 type ErrorBody = {
   error?: string;
@@ -44,6 +44,15 @@ export async function fetchUrl(id: string) {
 export async function createUrl(input: CreateUrlBody) {
   const response = await fetch("/api/urls", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJson<ShortUrlDto>(response);
+}
+
+export async function updateUrl(id: string, input: UpdateUrlBody) {
+  const response = await fetch(`/api/urls/${id}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
