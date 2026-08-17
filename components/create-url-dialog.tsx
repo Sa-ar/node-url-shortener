@@ -20,13 +20,13 @@ export function CreateUrlDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[min(90dvh,40rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Create a saar.to link</DialogTitle>
           <DialogDescription>
             {isOwner
-              ? "Paste a destination or attach a file. Use a custom slug for saar.to/slug, or Premium for slug.saar.to."
-              : "Paste a destination or attach a file. An optional slug becomes saar.to/your-slug."}
+              ? "Paste a URL or attach a file. Premium and extras live under Options."
+              : "Paste a URL or attach a file. Password, note, and preview live under Options."}
           </DialogDescription>
         </DialogHeader>
         {open ? (
