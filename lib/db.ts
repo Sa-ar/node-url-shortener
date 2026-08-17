@@ -5,6 +5,7 @@ import { ShortUrl } from "@/lib/models/short-url";
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
+  ensure: Promise<void> | null;
 }
 
 const globalWithMongoose = globalThis as typeof globalThis & {
@@ -14,6 +15,7 @@ const globalWithMongoose = globalThis as typeof globalThis & {
 const cached: MongooseCache = globalWithMongoose.mongoose ?? {
   conn: null,
   promise: null,
+  ensure: null,
 };
 
 if (!globalWithMongoose.mongoose) {
@@ -25,47 +27,70 @@ export const MONGODB_DB_NAME = "url-shortener";
 /** Drop legacy global unique index on `short` so path and subdomain can share labels. */
 async function ensureShortUrlIndexes() {
   try {
-    await ShortUrl.collection.dropIndex("short_1");
+    const indexes = await ShortUrl.collection.indexes();
+    if (indexes.some((index) => index.name === "short_1")) {
+      await ShortUrl.collection.dropIndex("short_1");
+    }
   } catch (error) {
     const code =
       typeof error === "object" && error !== null && "code" in error
         ? (error as { code: unknown }).code
         : undefined;
-    // 27 = IndexNotFound
-    if (code !== 27) {
-      console.warn("[db] dropIndex short_1:", error);
+    // 26 = NamespaceNotFound (empty database)
+    if (code !== 26) {
+      throw error;
     }
   }
-  await ShortUrl.syncIndexes();
+  await ShortUrl.createIndexes();
 }
 
-export async function connectDB() {
+function scheduleEnsure() {
+  if (!cached.ensure) {
+    cached.ensure = (async () => {
+      try {
+        await ensureShortUrlIndexes();
+        await ensureUserRoles();
+      } catch (error) {
+        cached.ensure = null;
+        console.warn("[db] schema ensure failed:", error);
+      }
+    })();
+  }
+
+  return cached.ensure;
+}
+
+export async function connectDB(options?: { waitForEnsure?: boolean }) {
   const mongoUri = process.env.MONGODB_URI;
 
   if (!mongoUri) {
     throw new Error("Please define the MONGODB_URI environment variable");
   }
 
-  if (cached.conn) {
-    return cached.conn;
+  if (!cached.conn) {
+    if (!cached.promise) {
+      cached.promise = mongoose.connect(mongoUri, {
+        bufferCommands: false,
+        autoIndex: false,
+        dbName: MONGODB_DB_NAME,
+      });
+    }
+
+    try {
+      cached.conn = await cached.promise;
+    } catch (error) {
+      cached.promise = null;
+      cached.conn = null;
+      cached.ensure = null;
+      await mongoose.disconnect().catch(() => undefined);
+      throw error;
+    }
   }
 
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(mongoUri, {
-      bufferCommands: false,
-      dbName: MONGODB_DB_NAME,
-    });
+  const ensure = scheduleEnsure();
+  if (options?.waitForEnsure) {
+    await ensure;
   }
 
-  try {
-    cached.conn = await cached.promise;
-    await ensureShortUrlIndexes();
-    await ensureUserRoles();
-    return cached.conn;
-  } catch (error) {
-    cached.promise = null;
-    cached.conn = null;
-    await mongoose.disconnect().catch(() => undefined);
-    throw error;
-  }
+  return cached.conn;
 }
