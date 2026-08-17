@@ -5,7 +5,8 @@ function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
     pathname.startsWith("/stats") ||
-    pathname.startsWith("/api/urls")
+    pathname.startsWith("/api/urls") ||
+    pathname.startsWith("/api/invites")
   );
 }
 
@@ -35,5 +36,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/stats/:path*", "/api/urls/:path*"],
+  matcher: ["/", "/stats/:path*", "/api/urls/:path*", "/api/invites/:path*"],
 };
