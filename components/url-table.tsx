@@ -69,7 +69,6 @@ export function UrlTable({
   totalCount,
   isOwner = false,
   onRetry,
-  onCreate,
   onClearFilters,
 }: {
   urls: ShortUrlDto[];
@@ -81,7 +80,6 @@ export function UrlTable({
   totalCount: number;
   isOwner?: boolean;
   onRetry?: () => void;
-  onCreate: () => void;
   onClearFilters: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -327,7 +325,7 @@ export function UrlTable({
             title="No short URLs yet"
             description="Create a saar.to link to start tracking clicks."
             action={
-              <Button type="button" className="rounded-full" onClick={onCreate}>
+              <Button className="rounded-full" render={<Link href="/new" />}>
                 Create a new link
               </Button>
             }
@@ -356,7 +354,7 @@ export function UrlTable({
                         {header.isPlaceholder ? null : canSort ? (
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1"
+                            className="inline-flex cursor-pointer items-center gap-1"
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             <table.FlexRender header={header} />

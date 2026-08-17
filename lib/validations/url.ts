@@ -9,6 +9,7 @@ import { isAllowedFileType, mustForceAttachment } from "@/lib/file-types";
 export const RESERVED_SLUGS = new Set([
   "api",
   "stats",
+  "new",
   "login",
   "register",
   "signin",

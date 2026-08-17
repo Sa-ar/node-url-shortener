@@ -120,7 +120,7 @@ function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={selected}
-            className={`rounded-xl border px-3 py-2 text-sm ${
+            className={`cursor-pointer rounded-xl border px-3 py-2 text-sm ${
               selected
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border text-muted-foreground"
@@ -169,7 +169,7 @@ function ToggleRow({
         type="button"
         role="switch"
         aria-checked={checked}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+        className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
           checked ? "bg-primary" : "bg-muted-foreground/30"
         }`}
         onClick={onToggle}
