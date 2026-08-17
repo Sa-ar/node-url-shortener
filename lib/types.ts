@@ -28,3 +28,9 @@ export type CreateUrlBody = {
   expiresAt?: string;
   kind?: ShortUrlKind;
 };
+
+export type UpdateUrlBody = {
+  fullUrl: string;
+  slug: string;
+  expiresAt?: string;
+};

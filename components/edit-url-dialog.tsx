@@ -1,5 +1,6 @@
 "use client";
 
+import type { ShortUrlDto } from "@/lib/types";
 import { UrlForm } from "@/components/url-form";
 import {
   Dialog,
@@ -9,28 +10,31 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export function CreateUrlDialog({
-  open,
+export function EditUrlDialog({
+  url,
   onOpenChange,
   isOwner = false,
 }: {
-  open: boolean;
+  /** The link being edited, or null when the dialog is closed. */
+  url: ShortUrlDto | null;
   onOpenChange: (open: boolean) => void;
   isOwner?: boolean;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={url !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create a saar.to link</DialogTitle>
+          <DialogTitle>Edit link</DialogTitle>
           <DialogDescription>
-            {isOwner
-              ? "Paste a destination. Use a custom slug for saar.to/slug, or Premium for slug.saar.to."
-              : "Paste a destination. An optional slug becomes saar.to/your-slug."}
+            {url?.kind === "subdomain"
+              ? "Update the destination, subdomain, or expiry for this premium link."
+              : "Update the destination, slug, or expiry. Changing the slug updates the short URL."}
           </DialogDescription>
         </DialogHeader>
-        {open ? (
+        {url ? (
           <UrlForm
+            key={url.id}
+            url={url}
             isOwner={isOwner}
             onSaved={() => {
               onOpenChange(false);

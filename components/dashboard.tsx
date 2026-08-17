@@ -106,6 +106,8 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         }
         hasLinks={allUrls.length > 0}
         hasActiveFilters={hasActiveFilters}
+        totalCount={allUrls.length}
+        isOwner={isOwner}
         onRetry={() => {
           void query.refetch();
         }}
