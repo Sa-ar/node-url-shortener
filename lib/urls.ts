@@ -57,23 +57,23 @@ export function serializeShortUrl(
 
 export function findShortUrl(id: string) {
   if (OBJECT_ID_RE.test(id)) {
-    return ShortUrl.findOne({
-      $or: [{ _id: id }, { short: id }],
-    });
+    return ShortUrl.findOne({ _id: id });
   }
 
-  return ShortUrl.findOne({ short: id });
+  // Short labels are unique per kind; bare slug lookups mean path links.
+  return ShortUrl.findOne({ short: id, kind: { $ne: "subdomain" } });
 }
 
 export function findOwnedShortUrl(id: string, userId: string) {
   if (OBJECT_ID_RE.test(id)) {
-    return ShortUrl.findOne({
-      userId,
-      $or: [{ _id: id }, { short: id }],
-    });
+    return ShortUrl.findOne({ _id: id, userId });
   }
 
-  return ShortUrl.findOne({ userId, short: id });
+  return ShortUrl.findOne({
+    userId,
+    short: id,
+    kind: { $ne: "subdomain" },
+  });
 }
 
 export function findAccessibleShortUrl(

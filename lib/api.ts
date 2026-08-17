@@ -4,12 +4,27 @@ type ErrorBody = {
   error?: string;
 };
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
 async function parseJson<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => ({}))) as T & ErrorBody;
 
   if (!response.ok) {
-    throw new Error(
-      typeof data.error === "string" ? data.error : "Request failed"
+    throw new ApiError(
+      typeof data.error === "string" ? data.error : "Request failed",
+      response.status
     );
   }
 

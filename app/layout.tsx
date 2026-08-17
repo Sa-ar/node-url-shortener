@@ -24,7 +24,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "saar.to",
-  description: "Short links from saar.to — create, track, and share.",
+  description: "Personal URL shortener — create, track, and share links.",
   metadataBase: new URL("https://saar.to"),
 };
 

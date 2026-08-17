@@ -215,7 +215,7 @@ export function UrlTable({
                   variant="ghost"
                   size="icon-sm"
                   aria-label="View stats"
-                  render={<Link href={`/stats/${row.short}`} />}
+                  render={<Link href={`/stats/${row.id}`} />}
                 >
                   <BarChart3 />
                 </Button>
