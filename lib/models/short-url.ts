@@ -41,7 +41,6 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
     short: {
       type: String,
       required: true,
-      unique: true,
       default: () => nanoid(7),
     },
     kind: {
@@ -57,6 +56,10 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
   },
   { timestamps: true }
 );
+
+// Path slugs and subdomain labels are separate namespaces:
+// saar.to/resume and resume.saar.to may both exist.
+shortUrlSchema.index({ kind: 1, short: 1 }, { unique: true });
 
 export const ShortUrl =
   (models.ShortUrl as Model<ShortUrlAttrs> | undefined) ??

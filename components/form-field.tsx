@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 export function FormField({
   label,
   htmlFor,
+  requirement,
   hint,
   error,
   className,
@@ -12,6 +13,9 @@ export function FormField({
 }: {
   label: string;
   htmlFor: string;
+  /** Shown next to the label in smaller type, e.g. Required / Optional. */
+  requirement?: string;
+  /** Example or helper text under the field. */
   hint?: string;
   error?: string;
   className?: string;
@@ -24,9 +28,16 @@ export function FormField({
         className
       )}
     >
-      <Label htmlFor={htmlFor} className="h-5 truncate leading-5">
-        {label}
-      </Label>
+      <div className="flex h-5 min-w-0 items-baseline gap-2 leading-5">
+        <Label htmlFor={htmlFor} className="truncate leading-5">
+          {label}
+        </Label>
+        {requirement ? (
+          <span className="shrink-0 text-[11px] font-normal text-muted-foreground">
+            {requirement}
+          </span>
+        ) : null}
+      </div>
       {children}
       <p
         className={cn(
