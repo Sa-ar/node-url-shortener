@@ -54,7 +54,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  await connectDB();
+  await connectDB({ waitForEnsure: true });
   const doc = await findAccessibleShortUrl(
     id,
     session.user.id,
@@ -134,7 +134,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  await connectDB();
+  await connectDB({ waitForEnsure: true });
   const doc = await findAccessibleShortUrl(
     id,
     session.user.id,

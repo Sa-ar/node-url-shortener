@@ -7,6 +7,7 @@ import {
   getBaseUrl,
   isDuplicateKeyError,
   isMongooseValidationError,
+  listShortUrls,
   serializeShortUrl,
 } from "@/lib/urls";
 import { createUrlSchema } from "@/lib/validations/url";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   const filter = isOwnerRole(session.user.role)
     ? {}
     : { userId: session.user.id };
-  const docs = await ShortUrl.find(filter).sort({ createdAt: -1 });
+  const docs = await listShortUrls(filter);
   const baseUrl = getBaseUrl(request);
 
   return NextResponse.json(docs.map((doc) => serializeShortUrl(doc, baseUrl)));
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await connectDB();
+  await connectDB({ waitForEnsure: true });
 
   try {
     const doc = await ShortUrl.create({

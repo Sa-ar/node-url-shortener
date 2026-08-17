@@ -30,7 +30,10 @@ export function shortUrlKind(
 }
 
 export function serializeShortUrl(
-  doc: ShortUrlAttrs & { _id: { toString(): string } },
+  doc: Omit<ShortUrlAttrs, "dailyClicks"> & {
+    _id: { toString(): string };
+    dailyClicks?: DailyClick[];
+  },
   baseUrl: string
 ): ShortUrlDto {
   const kind = shortUrlKind(doc);
@@ -53,6 +56,13 @@ export function serializeShortUrl(
     updatedAt: new Date(doc.updatedAt).toISOString(),
     expired: isExpired(doc.expiresAt),
   };
+}
+
+export function listShortUrls(filter: { userId?: string } = {}) {
+  return ShortUrl.find(filter)
+    .sort({ createdAt: -1 })
+    .select("-dailyClicks")
+    .lean();
 }
 
 export function findShortUrl(id: string) {
