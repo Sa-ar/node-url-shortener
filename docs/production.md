@@ -29,6 +29,9 @@ Set these in the Vercel project → Settings → Environment Variables (Producti
 | `NEXT_PUBLIC_BASE_URL` | `https://saar.to` |
 | `NEXTAUTH_URL` | `https://saar.to` |
 | `NEXTAUTH_SECRET` | Long random secret (`openssl rand -base64 32`) |
+| `VERCEL_TOKEN` | (Optional) Token for auto-adding `{slug}.saar.to` domains |
+| `VERCEL_PROJECT_ID` | (Optional) Project id from `.vercel/project.json` |
+| `VERCEL_TEAM_ID` | (Optional) Team/org id (`orgId` in `.vercel/project.json`) |
 
 Local `.env.local` may use `NEXTAUTH_URL=http://localhost:3000` and a local or Atlas URI. Never commit secrets.
 
@@ -55,7 +58,7 @@ git push -u origin HEAD
 1. Create a free **M0** cluster (region near you or near Vercel).
 2. Create a database user with a strong password.
 3. Network Access: allow `0.0.0.0/0` for Hobby deploys, or restrict later.
-4. Database name can be `url-shortener` (or any name in the URI path).
+4. Put `/url-shortener` in the URI path (`mongodb+srv://…mongodb.net/url-shortener`). A missing path makes Mongoose use the `test` database.
 5. Copy the `mongodb+srv://…` URI into Vercel as `MONGODB_URI`.
 
 ## Vercel checklist
@@ -67,9 +70,18 @@ git push -u origin HEAD
 5. At the registrar, add the DNS records Vercel shows (usually A/ALIAS/CNAME).
 6. Confirm `https://saar.to` loads and `/login` works against Atlas.
 
+## Owner vanity subdomains (`resume.saar.to`)
+
+Hobby does not support a Vercel wildcard custom domain. Per-subdomain hosts are added via the Domains API when an owner creates a premium link.
+
+1. At the registrar, add a one-time **wildcard CNAME**: `*.saar.to` → the same Vercel target as apex (or `cname.vercel-dns.com` as shown in the dashboard).
+2. Set `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, and `VERCEL_TEAM_ID` on Production so create/delete can attach/remove `{slug}.saar.to`.
+3. Manual fallback: Project → Domains → Add `{slug}.saar.to`.
+4. After creating a premium link, open `https://{slug}.saar.to` and confirm it redirects.
+
 ## Smoke test after first deploy
 
-1. Create the owner with `npm run create-user` pointed at Atlas (`MONGODB_URI`).
+1. Pull production env with `npm run env:pull-prod`, then create the owner with `npm run create-user -- --name "Saar" --email you@example.com --password '…' --target production`.
 2. Open `https://saar.to/login` and sign in.
 3. Create a short link; confirm `https://saar.to/{code}` redirects.
 4. Use **Invite** to copy a link; open it in a private window and register a member.
