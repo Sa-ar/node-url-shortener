@@ -143,7 +143,8 @@ export function UrlForm({
           <FormField
             label="Destination URL"
             htmlFor={field.name}
-            hint="Required"
+            requirement="Required"
+            hint="https://example.com/very/long/path"
             error={
               field.state.meta.errors[0]
                 ? formatFormError(field.state.meta.errors[0])
@@ -170,10 +171,11 @@ export function UrlForm({
           <FormField
             label={isPremium ? "Subdomain" : "Custom slug"}
             htmlFor={field.name}
+            requirement={isPremium ? "Required" : "Optional"}
             hint={
               isPremium
-                ? `Required · https://${previewSlug}.${apexHost}`
-                : "Optional · 3–32 chars"
+                ? `https://${previewSlug}.${apexHost}`
+                : "3–32 chars · letters, numbers, _ or -"
             }
             error={
               field.state.meta.errors[0]
@@ -200,7 +202,7 @@ export function UrlForm({
           <FormField
             label="Expires"
             htmlFor={field.name}
-            hint="Optional"
+            requirement="Optional"
             error={
               field.state.meta.errors[0]
                 ? formatFormError(field.state.meta.errors[0])

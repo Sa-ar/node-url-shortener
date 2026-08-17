@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "create-user": "tsx --env-file=.env.local scripts/create-user.ts"
+    "create-user": "tsx scripts/create-user.ts",
+    "env:pull-prod": "vercel env pull .env.prod --environment production --yes"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

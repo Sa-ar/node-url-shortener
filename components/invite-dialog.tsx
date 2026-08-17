@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import {
   type InviteDto,
 } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,15 +23,21 @@ import {
 } from "@/components/ui/dialog";
 
 async function copyText(text: string) {
-  await navigator.clipboard.writeText(text);
-  toast.success("Invite link copied");
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success("Invite link copied");
+  } catch {
+    toast.error("Could not copy invite link");
+  }
 }
 
 export function InviteDialog() {
+  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const invitesQuery = useQuery({
     queryKey: ["invites"],
     queryFn: fetchInvites,
+    enabled: open,
   });
 
   const createMutation = useMutation({
@@ -55,7 +63,7 @@ export function InviteDialog() {
   });
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <Button type="button" variant="outline" className="rounded-full" />
@@ -89,15 +97,26 @@ export function InviteDialog() {
             Pending
           </p>
           {invitesQuery.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading invites…</p>
+            <LoadingState label="Loading invites…" className="py-8" />
           ) : invitesQuery.isError ? (
-            <p className="text-sm text-destructive">
-              {invitesQuery.error instanceof Error
-                ? invitesQuery.error.message
-                : "Could not load invites"}
-            </p>
+            <ErrorState
+              className="py-8"
+              title="Could not load invites"
+              message={
+                invitesQuery.error instanceof Error
+                  ? invitesQuery.error.message
+                  : undefined
+              }
+              onRetry={() => {
+                void invitesQuery.refetch();
+              }}
+            />
           ) : (invitesQuery.data?.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground">No open invites.</p>
+            <EmptyState
+              className="py-8"
+              title="No open invites"
+              description="Create a link to invite someone."
+            />
           ) : (
             <ul className="space-y-2">
               {(invitesQuery.data as InviteDto[]).map((invite) => (
@@ -128,7 +147,10 @@ export function InviteDialog() {
                       variant="ghost"
                       size="icon-sm"
                       aria-label="Revoke invite"
-                      disabled={revokeMutation.isPending}
+                      disabled={
+                        revokeMutation.isPending &&
+                        revokeMutation.variables === invite.id
+                      }
                       onClick={() => revokeMutation.mutate(invite.id)}
                     >
                       <Trash2 />
