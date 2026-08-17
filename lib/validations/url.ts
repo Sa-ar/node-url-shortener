@@ -11,7 +11,18 @@ export const RESERVED_SLUGS = new Set([
   "favicon.ico",
   "robots.txt",
   "sitemap.xml",
+  "go",
+  "www",
+  "app",
+  "mail",
+  "admin",
+  "cdn",
+  "vercel",
 ]);
+
+const slugPattern = /^[a-zA-Z0-9_-]+$/;
+/** DNS labels: letters, digits, hyphens; no underscores. */
+const subdomainLabelPattern = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/i;
 
 export const createUrlSchema = z
   .object({
@@ -37,17 +48,46 @@ export const createUrlSchema = z
       }),
     slug: z.string(),
     expiresAt: z.string(),
+    kind: z.enum(["path", "subdomain"]),
   })
   .superRefine((data, ctx) => {
     const slug = data.slug.trim();
-    if (slug !== "") {
+    const kind = data.kind;
+
+    if (kind === "subdomain") {
+      if (slug === "") {
+        ctx.addIssue({
+          code: "custom",
+          message: "Subdomain is required",
+          path: ["slug"],
+        });
+      } else if (slug.length < 3 || slug.length > 32) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Subdomain must be 3–32 characters",
+          path: ["slug"],
+        });
+      } else if (!subdomainLabelPattern.test(slug)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Use letters, numbers, or hyphens",
+          path: ["slug"],
+        });
+      } else if (RESERVED_SLUGS.has(slug.toLowerCase())) {
+        ctx.addIssue({
+          code: "custom",
+          message: "This subdomain is reserved",
+          path: ["slug"],
+        });
+      }
+    } else if (slug !== "") {
       if (slug.length < 3 || slug.length > 32) {
         ctx.addIssue({
           code: "custom",
           message: "Slug must be 3–32 characters",
           path: ["slug"],
         });
-      } else if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+      } else if (!slugPattern.test(slug)) {
         ctx.addIssue({
           code: "custom",
           message: "Use letters, numbers, underscores, or hyphens",
@@ -80,11 +120,21 @@ export const createUrlSchema = z
       }
     }
   })
-  .transform((data) => ({
-    fullUrl: data.fullUrl,
-    slug: data.slug.trim() === "" ? undefined : data.slug.trim(),
-    expiresAt: data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
-  }));
+  .transform((data) => {
+    const kind = data.kind;
+    const slug = data.slug.trim();
+    return {
+      fullUrl: data.fullUrl,
+      slug:
+        slug === ""
+          ? undefined
+          : kind === "subdomain"
+            ? slug.toLowerCase()
+            : slug,
+      expiresAt: data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
+      kind,
+    };
+  });
 
 export type CreateUrlInput = z.input<typeof createUrlSchema>;
 export type CreateUrlValues = z.output<typeof createUrlSchema>;

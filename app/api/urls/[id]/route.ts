@@ -5,7 +5,9 @@ import {
   findAccessibleShortUrl,
   getBaseUrl,
   serializeShortUrl,
+  shortUrlKind,
 } from "@/lib/urls";
+import { removeVanityDomain } from "@/lib/vercel-domains";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +55,13 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Short URL not found" }, { status: 404 });
   }
 
+  const kind = shortUrlKind(doc);
+  const label = doc.short;
   await doc.deleteOne();
+
+  if (kind === "subdomain") {
+    await removeVanityDomain(label);
+  }
+
   return NextResponse.json({ ok: true });
 }

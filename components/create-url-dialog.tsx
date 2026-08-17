@@ -12,9 +12,11 @@ import {
 export function CreateUrlDialog({
   open,
   onOpenChange,
+  isOwner = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isOwner?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -22,11 +24,14 @@ export function CreateUrlDialog({
         <DialogHeader>
           <DialogTitle>Create a saar.to link</DialogTitle>
           <DialogDescription>
-            Paste a destination. An optional slug becomes saar.to/your-slug.
+            {isOwner
+              ? "Paste a destination. Use a custom slug for saar.to/slug, or Premium for slug.saar.to."
+              : "Paste a destination. An optional slug becomes saar.to/your-slug."}
           </DialogDescription>
         </DialogHeader>
         {open ? (
           <UrlForm
+            isOwner={isOwner}
             onCreated={() => {
               onOpenChange(false);
             }}

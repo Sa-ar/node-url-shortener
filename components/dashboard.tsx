@@ -49,8 +49,10 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
             Dashboard
           </h1>
           <p className="max-w-xl text-muted-foreground">
-            Filter your links and watch the totals update. New short URLs go out
-            as saar.to/your-slug.
+            Filter your links and watch the totals update.
+            {isOwner
+              ? " Path links use saar.to/slug; premium links use slug.saar.to."
+              : " New short URLs go out as saar.to/your-slug."}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -93,7 +95,7 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         </Select>
       </div>
 
-      <UrlOverview urls={query.isPending ? [] : filteredUrls} />
+      <UrlOverview urls={filteredUrls} isPending={query.isPending} />
 
       <UrlTable
         urls={filteredUrls}
@@ -104,6 +106,9 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         }
         hasLinks={allUrls.length > 0}
         hasActiveFilters={hasActiveFilters}
+        onRetry={() => {
+          void query.refetch();
+        }}
         onCreate={() => setCreateOpen(true)}
         onClearFilters={() => {
           setSearch("");
@@ -111,7 +116,11 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         }}
       />
 
-      <CreateUrlDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateUrlDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        isOwner={isOwner}
+      />
     </main>
   );
 }

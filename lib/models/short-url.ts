@@ -6,10 +6,13 @@ export type DailyClick = {
   count: number;
 };
 
+export type ShortUrlKind = "path" | "subdomain";
+
 export type ShortUrlAttrs = {
   userId: Types.ObjectId;
   full: string;
   short: string;
+  kind: ShortUrlKind;
   clicks: number;
   expiresAt?: Date | null;
   lastAccessedAt?: Date | null;
@@ -40,6 +43,12 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
       required: true,
       unique: true,
       default: () => nanoid(7),
+    },
+    kind: {
+      type: String,
+      enum: ["path", "subdomain"],
+      required: true,
+      default: "path",
     },
     clicks: { type: Number, required: true, default: 0 },
     expiresAt: { type: Date, default: null },
