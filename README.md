@@ -61,11 +61,11 @@ Public `/register` is closed. Create the owner with:
 
 ```bash
 # local Mongo (.env.local)
-npm run create-user -- --name "Saar" --email you@example.com --password 'your-password'
+npm run create-user -- --name "Owner" --email you@example.com --password 'your-password'
 
 # production Atlas (.env.prod from Vercel)
 npm run env:pull-prod
-npm run create-user -- --name "Saar" --email you@example.com --password 'your-password' --target production
+npm run create-user -- --name "Owner" --email you@example.com --password 'your-password' --target production
 ```
 
 Then sign in at `/login` (or `https://saar.to/login` for production). From the dashboard, use **Invite** to copy a one-time link (`/register?invite=…`, expires in 7 days).

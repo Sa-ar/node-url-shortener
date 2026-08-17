@@ -81,7 +81,7 @@ Hobby does not support a Vercel wildcard custom domain. Per-subdomain hosts are 
 
 ## Smoke test after first deploy
 
-1. Pull production env with `npm run env:pull-prod`, then create the owner with `npm run create-user -- --name "Saar" --email you@example.com --password '…' --target production`.
+1. Pull production env with `npm run env:pull-prod`, then create the owner with `npm run create-user -- --name "Owner" --email you@example.com --password '…' --target production`.
 2. Open `https://saar.to/login` and sign in.
 3. Create a short link; confirm `https://saar.to/{code}` redirects.
 4. Use **Invite** to copy a link; open it in a private window and register a member.

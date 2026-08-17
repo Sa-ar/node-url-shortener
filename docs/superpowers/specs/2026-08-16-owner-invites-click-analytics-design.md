@@ -20,7 +20,7 @@ JWT/session includes `id` and `role`. `requireUserId()` stays; add `requireOwner
 If the users collection is empty, the only way in is:
 
 ```bash
-npm run create-user -- --name "Saar" --email you@example.com --password '…'
+npm run create-user -- --name "Owner" --email you@example.com --password '…'
 ```
 
 `create-user` always creates `role: "owner"`. Running it again creates another owner (backup account). Members are never created by the script. There is no web UI to promote or create owners.

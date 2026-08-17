@@ -8,7 +8,7 @@ import { ensureUserRoles } from "../lib/roles";
 function usage() {
   console.error(
     `Usage:
-  npm run create-user -- --name "Saar" --email you@example.com --password '…' [--target local|production]
+  npm run create-user -- --name "Owner" --email you@example.com --password '…' [--target local|production]
 
 Creates an owner account. Members must register via an invite link.
 
