@@ -11,6 +11,10 @@ export function getBaseUrl(request?: Request) {
     return process.env.NEXT_PUBLIC_BASE_URL.replace(/\/$/, "");
   }
 
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
+  }
+
   if (request) {
     return new URL(request.url).origin;
   }
@@ -58,6 +62,18 @@ export function findOwnedShortUrl(id: string, userId: string) {
   }
 
   return ShortUrl.findOne({ userId, short: id });
+}
+
+export function findAccessibleShortUrl(
+  id: string,
+  userId: string,
+  role: string | null | undefined
+) {
+  if (role === "owner") {
+    return findShortUrl(id);
+  }
+
+  return findOwnedShortUrl(id, userId);
 }
 
 export function recordClick(doc: {

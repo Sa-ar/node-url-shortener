@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { signIn } from "next-auth/react";
@@ -130,10 +129,7 @@ export function LoginForm() {
             )}
           </form.Subscribe>
           <p className="text-center text-sm text-muted-foreground">
-            No account?{" "}
-            <Link href="/register" className="text-primary underline-offset-4 hover:underline">
-              Create one
-            </Link>
+            Accounts are invite-only. Ask the owner for a link.
           </p>
         </form>
       </CardContent>
