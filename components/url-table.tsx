@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { deleteUrl } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { ShortUrlDto } from "@/lib/types";
+import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,8 +56,12 @@ const features = tableFeatures({
 const columnHelper = createColumnHelper<typeof features, ShortUrlDto>();
 
 async function copyShortUrl(url: string) {
-  await navigator.clipboard.writeText(url);
-  toast.success("Copied to clipboard");
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success("Copied to clipboard");
+  } catch {
+    toast.error("Could not copy to clipboard");
+  }
 }
 
 export function UrlTable({
@@ -66,6 +71,7 @@ export function UrlTable({
   errorMessage,
   hasLinks,
   hasActiveFilters,
+  onRetry,
   onCreate,
   onClearFilters,
 }: {
@@ -75,6 +81,7 @@ export function UrlTable({
   errorMessage?: string;
   hasLinks: boolean;
   hasActiveFilters: boolean;
+  onRetry?: () => void;
   onCreate: () => void;
   onClearFilters: () => void;
 }) {
@@ -112,14 +119,26 @@ export function UrlTable({
         columnHelper.accessor("shortUrl", {
           header: "Short URL",
           enableSorting: false,
-          cell: (info) => (
-            <a
-              href={info.getValue()}
-              className="font-mono text-sm text-primary underline-offset-4 hover:underline"
-            >
-              {info.row.original.short}
-            </a>
-          ),
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <div className="flex flex-col gap-1">
+                <a
+                  href={info.getValue()}
+                  className="font-mono text-sm text-primary underline-offset-4 hover:underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {row.kind === "subdomain" ? row.shortUrl.replace(/^https?:\/\//, "") : row.short}
+                </a>
+                {row.kind === "subdomain" ? (
+                  <Badge variant="outline" className="w-fit border-primary/40 text-primary">
+                    Premium
+                  </Badge>
+                ) : null}
+              </div>
+            );
+          },
         }),
         columnHelper.accessor("clicks", {
           header: "Clicks",
@@ -200,38 +219,38 @@ export function UrlTable({
       </CardHeader>
       <CardContent>
         {isPending ? (
-          <p className="text-sm text-muted-foreground">Loading links…</p>
+          <LoadingState label="Loading links…" />
         ) : isError ? (
-          <p className="text-sm text-destructive">
-            {errorMessage ?? "Could not load links"}
-          </p>
+          <ErrorState
+            title="Could not load links"
+            message={errorMessage}
+            onRetry={onRetry}
+          />
         ) : !hasLinks ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-            <Link2 className="size-8 text-primary drop-shadow-[0_0_12px_rgb(249_208_38/0.55)]" />
-            <div className="space-y-1">
-              <p className="font-medium">No short URLs yet</p>
-              <p className="text-sm text-muted-foreground">
-                Create a saar.to link to start tracking clicks.
-              </p>
-            </div>
-            <Button type="button" className="rounded-full" onClick={onCreate}>
-              Create a new link
-            </Button>
-          </div>
-        ) : urls.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-            <div className="space-y-1">
-              <p className="font-medium">No links match these filters</p>
-              <p className="text-sm text-muted-foreground">
-                Try a different search or status.
-              </p>
-            </div>
-            {hasActiveFilters ? (
-              <Button type="button" variant="outline" onClick={onClearFilters}>
-                Clear filters
+          <EmptyState
+            icon={
+              <Link2 className="size-8 text-primary drop-shadow-[0_0_12px_rgb(249_208_38/0.55)]" />
+            }
+            title="No short URLs yet"
+            description="Create a saar.to link to start tracking clicks."
+            action={
+              <Button type="button" className="rounded-full" onClick={onCreate}>
+                Create a new link
               </Button>
-            ) : null}
-          </div>
+            }
+          />
+        ) : urls.length === 0 ? (
+          <EmptyState
+            title="No links match these filters"
+            description="Try a different search or status."
+            action={
+              hasActiveFilters ? (
+                <Button type="button" variant="outline" onClick={onClearFilters}>
+                  Clear filters
+                </Button>
+              ) : null
+            }
+          />
         ) : (
           <Table>
             <TableHeader>
@@ -293,7 +312,9 @@ export function UrlTable({
             <AlertDialogTitle>Delete this short URL?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDelete
-                ? `${pendingDelete.short} will stop redirecting to ${pendingDelete.full}.`
+                ? pendingDelete.kind === "subdomain"
+                  ? `${pendingDelete.shortUrl} will stop redirecting to ${pendingDelete.full}.`
+                  : `${pendingDelete.short} will stop redirecting to ${pendingDelete.full}.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>

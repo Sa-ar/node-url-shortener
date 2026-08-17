@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { getApexOrigin, parseVanityLabel } from "@/lib/hosts";
 
 function isProtectedPath(pathname: string) {
   return (
@@ -10,8 +11,34 @@ function isProtectedPath(pathname: string) {
   );
 }
 
+function isAppPathOnVanity(pathname: string) {
+  return (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname.startsWith("/stats") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/go/")
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const vanityLabel = parseVanityLabel(request.headers.get("host"));
+
+  if (vanityLabel) {
+    if (pathname === "/" || pathname === "") {
+      const url = request.nextUrl.clone();
+      url.pathname = `/go/${encodeURIComponent(vanityLabel)}`;
+      return NextResponse.rewrite(url);
+    }
+
+    if (isAppPathOnVanity(pathname)) {
+      const apex = getApexOrigin();
+      return NextResponse.redirect(new URL(pathname + request.nextUrl.search, apex));
+    }
+
+    return new NextResponse("Not Found", { status: 404 });
+  }
 
   if (!isProtectedPath(pathname)) {
     return NextResponse.next();
@@ -36,5 +63,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/stats/:path*", "/api/urls/:path*", "/api/invites/:path*"],
+  matcher: [
+    "/",
+    "/login",
+    "/register",
+    "/stats/:path*",
+    "/api/:path*",
+    "/go/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
+  ],
 };
