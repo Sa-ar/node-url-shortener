@@ -116,7 +116,12 @@ export async function POST(request: Request) {
   } catch (error) {
     if (isDuplicateKeyError(error)) {
       return NextResponse.json(
-        { error: "That slug is already taken" },
+        {
+          error:
+            parsed.data.kind === "subdomain"
+              ? "That subdomain is already taken"
+              : "That slug is already taken",
+        },
         { status: 409 }
       );
     }
