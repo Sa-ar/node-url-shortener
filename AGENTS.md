@@ -2,12 +2,14 @@
 
 - Prefer a Next.js App Router stack with TanStack (Form, Query, Table) and shadcn/ui (including shadcn Chart) when modernizing this shortener.
 - Require authenticated multi-user support; treat this as a personal shortener, not an open public signup product.
-- Keep the dashboard as the home experience: link statistics with search/status filters, create links in a modal, and empty states that prompt creating a link.
+- Keep the dashboard as the home experience: link statistics with search/status filters, create links on `/new`, and empty states that prompt creating a link.
 - Match saar.fyi brand styling: dark violet-black surfaces with gold accent `#F9D026` (exact), and keep the product branded as saar.to.
 - Prioritize rich click/visit analytics (per-hit detail, uniques, bot filtering) over minimal click counters alone.
 - Prefer explicit loading, error, success, and empty states across dashboard, stats, auth, and invite flows (including route-level loading/error UI).
 - Treat the GitHub repo as public: never commit PII, doxxing material, or secrets, including in git history.
 - Keep app pages on the same content width as the header; dialogs can stay narrower.
+- QR codes should be copyable and downloadable images (not display-only).
+- Default cursor for buttons should be pointer.
 
 ## Learned Workspace Facts
 
@@ -32,7 +34,7 @@ Standard commands live in `README.md` / `package.json` scripts (`npm run dev`, `
 - `.env.local` is git-ignored (never commit it) and is required for `npm run dev` and `npm run create-user`. If it is missing, recreate it with:
   `MONGODB_URI=mongodb://127.0.0.1:27017/url-shortener`, `NEXT_PUBLIC_BASE_URL=http://localhost:3000`, `NEXTAUTH_URL=http://localhost:3000`, and a `NEXTAUTH_SECRET` from `openssl rand -base64 32`. Use `NEXT_PUBLIC_BASE_URL=http://localhost:3000` locally so copied/redirect short links point at localhost, not `https://saar.to`.
 - Auth is invite-only: there is no public signup. Bootstrap a login with `npm run create-user -- --name "Owner" --email owner@saar.to --password 'devpassword123'`, then sign in at `/login`.
-- End-to-end sanity check: create a link in the dashboard modal, then `curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" http://localhost:3000/<slug>` should return `307` with the destination as `redirect_url`.
+- End-to-end sanity check: create a link at `/new`, then `curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" http://localhost:3000/<slug>` should return `307` with the destination as `redirect_url`.
 - `next dev` rewrites the `nextjs-agent-rules` block at the bottom of this file on every run; that uncommitted change is expected and harmless (committing it keeps the tree clean).
 
 <!-- BEGIN:nextjs-agent-rules -->

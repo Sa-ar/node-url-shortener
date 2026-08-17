@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -9,7 +10,6 @@ import {
   type LinkStatusFilter,
 } from "@/lib/dashboard";
 import { urlsQueryKey } from "@/lib/query";
-import { CreateUrlDialog } from "@/components/create-url-dialog";
 import { HideBotsToggle } from "@/components/hide-bots-toggle";
 import { InviteDialog } from "@/components/invite-dialog";
 import { PageShell } from "@/components/page-shell";
@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/select";
 
 export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
-  const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<LinkStatusFilter>("all");
   const [hideBots, setHideBots] = useState(false);
@@ -66,9 +65,8 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {isOwner ? <InviteDialog /> : null}
           <Button
-            type="button"
             className="rounded-full shadow-[0_0_24px_rgb(249_208_38/0.25)]"
-            onClick={() => setCreateOpen(true)}
+            render={<Link href="/new" />}
           >
             <Plus data-icon="inline-start" />
             Create link
@@ -125,17 +123,10 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         onRetry={() => {
           void query.refetch();
         }}
-        onCreate={() => setCreateOpen(true)}
         onClearFilters={() => {
           setSearch("");
           setStatus("all");
         }}
-      />
-
-      <CreateUrlDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        isOwner={isOwner}
       />
     </PageShell>
   );

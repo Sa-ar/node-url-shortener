@@ -103,6 +103,12 @@
     background: rgb(249 208 38 / 0.35);
     color: #0a0512;
   }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]),
+  [role="tab"] {
+    cursor: pointer;
+  }
   body {
     @apply bg-background text-foreground;
     background-image:
