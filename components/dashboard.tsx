@@ -9,6 +9,7 @@ import {
   type LinkStatusFilter,
 } from "@/lib/dashboard";
 import { CreateUrlDialog } from "@/components/create-url-dialog";
+import { InviteDialog } from "@/components/invite-dialog";
 import { UrlOverview } from "@/components/url-overview";
 import { UrlTable } from "@/components/url-table";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function Dashboard() {
+export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<LinkStatusFilter>("all");
@@ -52,14 +53,17 @@ export function Dashboard() {
             as saar.to/your-slug.
           </p>
         </div>
-        <Button
-          type="button"
-          className="rounded-full shadow-[0_0_24px_rgb(249_208_38/0.25)]"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus data-icon="inline-start" />
-          Create link
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {isOwner ? <InviteDialog /> : null}
+          <Button
+            type="button"
+            className="rounded-full shadow-[0_0_24px_rgb(249_208_38/0.25)]"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus data-icon="inline-start" />
+            Create link
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
