@@ -4,6 +4,49 @@ export type DailyClick = {
 };
 
 export type ShortUrlKind = "path" | "subdomain";
+export type ShortUrlTarget = "url" | "file";
+export type FileDisposition = "inline" | "attachment";
+export type FileSource = "blob" | "external";
+
+export type BreakdownRow = {
+  label: string;
+  count: number;
+};
+
+export type ClickEventDto = {
+  id: string;
+  createdAt: string;
+  ip: string;
+  country: string;
+  region: string;
+  city: string;
+  deviceType: string;
+  browser: string;
+  browserVersion: string;
+  os: string;
+  referrerHost: string;
+  isBot: boolean;
+};
+
+export type StatsOverviewDto = {
+  links: number;
+  clicks: number;
+  uniqueVisitors: number;
+  active: number;
+};
+
+export type LinkClicksDto = {
+  uniqueVisitors: number;
+  clicks: number;
+  daily: DailyClick[];
+  breakdowns: {
+    country: BreakdownRow[];
+    referrer: BreakdownRow[];
+    device: BreakdownRow[];
+    browser: BreakdownRow[];
+  };
+  recent: ClickEventDto[];
+};
 
 export type ShortUrlDto = {
   id: string;
@@ -11,6 +54,18 @@ export type ShortUrlDto = {
   short: string;
   shortUrl: string;
   kind: ShortUrlKind;
+  target: ShortUrlTarget;
+  disposition: FileDisposition | null;
+  fileName: string | null;
+  contentType: string | null;
+  fileSize: number | null;
+  fileSource: FileSource | null;
+  note: string | null;
+  createdByName: string | null;
+  hasPassword: boolean;
+  ogTitle: string | null;
+  ogDescription: string | null;
+  ogImageUrl: string | null;
   clicks: number;
   expiresAt: string | null;
   lastAccessedAt: string | null;
@@ -27,49 +82,34 @@ export type CreateUrlBody = {
   slug?: string;
   expiresAt?: string;
   kind?: ShortUrlKind;
+  target?: ShortUrlTarget;
+  disposition?: FileDisposition;
+  fileName?: string;
+  contentType?: string;
+  fileSize?: number;
+  fileSource?: FileSource;
+  note?: string;
+  password?: string;
+  removePassword?: boolean;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
 };
 
 export type UpdateUrlBody = {
   fullUrl: string;
   slug: string;
   expiresAt?: string;
-};
-
-export type OverviewStatsDto = {
-  links: number;
-  clicks: number;
-  uniqueVisitors: number;
-  active: number;
-};
-
-export type ClickBreakdownEntry = {
-  label: string;
-  count: number;
-};
-
-export type ClickEventDto = {
-  id: string;
-  createdAt: string;
-  country: string;
-  region: string;
-  city: string;
-  deviceType: string;
-  browser: string;
-  browserVersion: string;
-  referrerHost: string;
-  ip: string;
-  isBot: boolean;
-};
-
-export type UrlClicksDto = {
-  clicks: number;
-  uniqueVisitors: number;
-  daily: DailyClick[];
-  breakdowns: {
-    country: ClickBreakdownEntry[];
-    referrer: ClickBreakdownEntry[];
-    device: ClickBreakdownEntry[];
-    browser: ClickBreakdownEntry[];
-  };
-  recent: ClickEventDto[];
+  target?: ShortUrlTarget;
+  disposition?: FileDisposition;
+  fileName?: string;
+  contentType?: string;
+  fileSize?: number;
+  fileSource?: FileSource;
+  note?: string;
+  password?: string;
+  removePassword?: boolean;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
 };

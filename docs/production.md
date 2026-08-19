@@ -32,6 +32,7 @@ Set these in the Vercel project → Settings → Environment Variables (Producti
 | `VERCEL_TOKEN` | (Optional) Token for auto-adding `{slug}.saar.to` domains |
 | `VERCEL_PROJECT_ID` | (Optional) Project id from `.vercel/project.json` |
 | `VERCEL_TEAM_ID` | (Optional) Team/org id (`orgId` in `.vercel/project.json`) |
+| `BLOB_READ_WRITE_TOKEN` | (Optional) Vercel Blob store token for file-link uploads |
 
 Local `.env.local` may use `NEXTAUTH_URL=http://localhost:3000` and a local or Atlas URI. Never commit secrets.
 

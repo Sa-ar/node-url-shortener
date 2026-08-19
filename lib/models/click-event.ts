@@ -1,17 +1,5 @@
 import { model, models, Schema, type Model, type Types } from "mongoose";
 
-export type ClickEventDeviceType =
-  | "desktop"
-  | "mobile"
-  | "tablet"
-  | "smarttv"
-  | "wearable"
-  | "embedded"
-  | "console"
-  | "xr"
-  | "bot"
-  | "unknown";
-
 export type ClickEventAttrs = {
   shortUrlId: Types.ObjectId;
   userId: Types.ObjectId;
@@ -27,11 +15,10 @@ export type ClickEventAttrs = {
   browserVersion: string;
   os: string;
   osVersion: string;
-  deviceType: ClickEventDeviceType;
+  deviceType: string;
   isBot: boolean;
   visitorKey: string;
   createdAt: Date;
-  updatedAt: Date;
 };
 
 const clickEventSchema = new Schema<ClickEventAttrs>(
@@ -48,45 +35,28 @@ const clickEventSchema = new Schema<ClickEventAttrs>(
       required: true,
       index: true,
     },
-    short: { type: String, required: true, trim: true },
-    ip: { type: String, required: true, default: "" },
-    userAgent: { type: String, required: true, default: "" },
-    referrer: { type: String, required: true, default: "" },
-    acceptLanguage: { type: String, required: true, default: "" },
-    country: { type: String, required: true, default: "" },
-    region: { type: String, required: true, default: "" },
-    city: { type: String, required: true, default: "" },
-    browser: { type: String, required: true, default: "" },
-    browserVersion: { type: String, required: true, default: "" },
-    os: { type: String, required: true, default: "" },
-    osVersion: { type: String, required: true, default: "" },
-    deviceType: {
-      type: String,
-      enum: [
-        "desktop",
-        "mobile",
-        "tablet",
-        "smarttv",
-        "wearable",
-        "embedded",
-        "console",
-        "xr",
-        "bot",
-        "unknown",
-      ],
-      required: true,
-      default: "unknown",
-    },
-    isBot: { type: Boolean, required: true, default: false },
-    visitorKey: { type: String, required: true, trim: true },
+    short: { type: String, required: true },
+    ip: { type: String, default: "" },
+    userAgent: { type: String, default: "" },
+    referrer: { type: String, default: "" },
+    acceptLanguage: { type: String, default: "" },
+    country: { type: String, default: "" },
+    region: { type: String, default: "" },
+    city: { type: String, default: "" },
+    browser: { type: String, default: "" },
+    browserVersion: { type: String, default: "" },
+    os: { type: String, default: "" },
+    osVersion: { type: String, default: "" },
+    deviceType: { type: String, default: "" },
+    isBot: { type: Boolean, required: true, default: false, index: true },
+    visitorKey: { type: String, required: true, index: true },
   },
-  { timestamps: true }
+  { timestamps: { createdAt: true, updatedAt: false } }
 );
 
 clickEventSchema.index({ shortUrlId: 1, createdAt: -1 });
-clickEventSchema.index({ userId: 1, createdAt: -1 });
-clickEventSchema.index({ shortUrlId: 1, isBot: 1 });
-clickEventSchema.index({ userId: 1, isBot: 1 });
+clickEventSchema.index({ userId: 1, isBot: 1, visitorKey: 1 });
+clickEventSchema.index({ shortUrlId: 1, isBot: 1, createdAt: -1 });
 
 export const ClickEvent =
   (models.ClickEvent as Model<ClickEventAttrs> | undefined) ??

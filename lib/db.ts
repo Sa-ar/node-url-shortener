@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { ClickEvent } from "@/lib/models/click-event";
-import { ensureUserRoles } from "@/lib/roles";
 import { ShortUrl } from "@/lib/models/short-url";
+import { ensureUserRoles } from "@/lib/roles";
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -43,9 +43,6 @@ async function ensureShortUrlIndexes() {
     }
   }
   await ShortUrl.createIndexes();
-}
-
-async function ensureClickEventIndexes() {
   await ClickEvent.createIndexes();
 }
 
@@ -54,7 +51,6 @@ function scheduleEnsure() {
     cached.ensure = (async () => {
       try {
         await ensureShortUrlIndexes();
-        await ensureClickEventIndexes();
         await ensureUserRoles();
       } catch (error) {
         cached.ensure = null;

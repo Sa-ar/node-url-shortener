@@ -11,7 +11,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { BarChart3, Check, Copy, Link2, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, Check, Copy, Link2, Pencil, QrCode, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteUrl, fetchUrl } from "@/lib/api";
 import { isExpiringSoon } from "@/lib/dates";
@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/format";
 import { removeUrlFromCache, urlQueryKey } from "@/lib/query";
 import type { ShortUrlDto } from "@/lib/types";
 import { EditUrlDialog } from "@/components/edit-url-dialog";
+import { QrDialog } from "@/components/qr-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import {
   AlertDialog,
@@ -68,7 +69,6 @@ export function UrlTable({
   totalCount,
   isOwner = false,
   onRetry,
-  onCreate,
   onClearFilters,
 }: {
   urls: ShortUrlDto[];
@@ -80,12 +80,12 @@ export function UrlTable({
   totalCount: number;
   isOwner?: boolean;
   onRetry?: () => void;
-  onCreate: () => void;
   onClearFilters: () => void;
 }) {
   const queryClient = useQueryClient();
   const [pendingDelete, setPendingDelete] = useState<ShortUrlDto | null>(null);
   const [editing, setEditing] = useState<ShortUrlDto | null>(null);
+  const [qrUrl, setQrUrl] = useState<ShortUrlDto | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const deleteMutation = useMutation({
     mutationFn: deleteUrl,
@@ -93,6 +93,7 @@ export function UrlTable({
       toast.success("Short URL deleted");
       setPendingDelete(null);
       removeUrlFromCache(queryClient, id);
+      void queryClient.invalidateQueries({ queryKey: ["stats-overview"] });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -116,18 +117,35 @@ export function UrlTable({
     () =>
       columnHelper.columns([
         columnHelper.accessor("full", {
-          header: "Full URL",
+          header: "Destination",
           enableSorting: false,
-          cell: (info) => (
-            <a
-              href={info.getValue()}
-              className="block max-w-[220px] truncate text-primary underline-offset-4 hover:underline"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {info.getValue()}
-            </a>
-          ),
+          cell: (info) => {
+            const row = info.row.original;
+            const label =
+              row.target === "file" ? row.fileName || row.full : row.full;
+            return (
+              <div className="flex flex-col gap-1">
+                <a
+                  href={row.shortUrl}
+                  className="block max-w-[220px] truncate text-primary underline-offset-4 hover:underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {label}
+                </a>
+                {row.target === "file" ? (
+                  <Badge variant="outline" className="w-fit">
+                    File
+                  </Badge>
+                ) : null}
+                {row.note ? (
+                  <span className="max-w-[220px] truncate text-xs text-muted-foreground">
+                    {row.note}
+                  </span>
+                ) : null}
+              </div>
+            );
+          },
         }),
         columnHelper.accessor("shortUrl", {
           header: "Short URL",
@@ -149,10 +167,28 @@ export function UrlTable({
                     Premium
                   </Badge>
                 ) : null}
+                {row.hasPassword ? (
+                  <Badge variant="outline" className="w-fit">
+                    Password
+                  </Badge>
+                ) : null}
               </div>
             );
           },
         }),
+        ...(isOwner
+          ? [
+              columnHelper.accessor("createdByName", {
+                header: "Creator",
+                enableSorting: false,
+                cell: (info) => (
+                  <span className="text-sm text-muted-foreground">
+                    {info.getValue() || "—"}
+                  </span>
+                ),
+              }),
+            ]
+          : []),
         columnHelper.accessor("clicks", {
           header: "Clicks",
           sortFn: "alphanumeric",
@@ -206,6 +242,15 @@ export function UrlTable({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
+                  aria-label="Show QR code"
+                  onClick={() => setQrUrl(row)}
+                >
+                  <QrCode />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   aria-label="Edit short URL"
                   onClick={() => setEditing(row)}
                 >
@@ -240,7 +285,7 @@ export function UrlTable({
           },
         }),
       ]),
-    [copiedId, queryClient]
+    [copiedId, isOwner, queryClient]
   );
 
   const table = useTable({
@@ -280,7 +325,7 @@ export function UrlTable({
             title="No short URLs yet"
             description="Create a saar.to link to start tracking clicks."
             action={
-              <Button type="button" className="rounded-full" onClick={onCreate}>
+              <Button className="rounded-full" render={<Link href="/new" />}>
                 Create a new link
               </Button>
             }
@@ -309,7 +354,7 @@ export function UrlTable({
                         {header.isPlaceholder ? null : canSort ? (
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1"
+                            className="inline-flex cursor-pointer items-center gap-1"
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             <table.FlexRender header={header} />
@@ -345,6 +390,16 @@ export function UrlTable({
         )}
       </CardContent>
 
+      <QrDialog
+        url={qrUrl?.shortUrl ?? null}
+        shortUrl={qrUrl?.shortUrl ?? null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQrUrl(null);
+          }
+        }}
+      />
+
       <EditUrlDialog
         url={editing}
         isOwner={isOwner}
@@ -369,8 +424,8 @@ export function UrlTable({
             <AlertDialogDescription>
               {pendingDelete
                 ? pendingDelete.kind === "subdomain"
-                  ? `${pendingDelete.shortUrl} will stop redirecting to ${pendingDelete.full}.`
-                  : `${pendingDelete.short} will stop redirecting to ${pendingDelete.full}.`
+                  ? `${pendingDelete.shortUrl} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
+                  : `${pendingDelete.short} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>

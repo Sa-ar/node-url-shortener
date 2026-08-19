@@ -1,9 +1,9 @@
 import type {
   CreateUrlBody,
-  OverviewStatsDto,
+  LinkClicksDto,
   ShortUrlDto,
+  StatsOverviewDto,
   UpdateUrlBody,
-  UrlClicksDto,
 } from "@/lib/types";
 
 type ErrorBody = {
@@ -47,19 +47,18 @@ export async function fetchUrl(id: string) {
   return parseJson<ShortUrlDto>(response);
 }
 
-export async function fetchOverviewStats(excludeBots: boolean) {
-  const response = await fetch(`/api/stats/overview?excludeBots=${excludeBots}`, {
-    cache: "no-store",
-  });
-  return parseJson<OverviewStatsDto>(response);
+export async function fetchStatsOverview(excludeBots: boolean) {
+  const response = await fetch(
+    `/api/stats/overview?excludeBots=${excludeBots ? "true" : "false"}`
+  );
+  return parseJson<StatsOverviewDto>(response);
 }
 
 export async function fetchUrlClicks(id: string, excludeBots: boolean) {
   const response = await fetch(
-    `/api/urls/${id}/clicks?excludeBots=${excludeBots}`,
-    { cache: "no-store" }
+    `/api/urls/${id}/clicks?excludeBots=${excludeBots ? "true" : "false"}`
   );
-  return parseJson<UrlClicksDto>(response);
+  return parseJson<LinkClicksDto>(response);
 }
 
 export async function createUrl(input: CreateUrlBody) {

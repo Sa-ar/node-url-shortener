@@ -1,28 +1,20 @@
-import type { OverviewStatsDto } from "@/lib/types";
-import { ErrorState } from "@/components/query-state";
+import type { StatsOverviewDto } from "@/lib/types";
 import {
   Card,
   CardDescription,
-  CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function UrlOverview({
-  stats,
+  overview,
   isPending = false,
-  isError = false,
-  errorMessage,
-  onRetry,
 }: {
-  stats?: OverviewStatsDto;
+  overview?: StatsOverviewDto;
   isPending?: boolean;
-  isError?: boolean;
-  errorMessage?: string;
-  onRetry?: () => void;
 }) {
-  if (isPending) {
+  if (isPending || !overview) {
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
@@ -37,27 +29,12 @@ export function UrlOverview({
     );
   }
 
-  if (isError || !stats) {
-    return (
-      <Card>
-        <CardContent>
-          <ErrorState
-            className="py-8"
-            title="Could not load overview"
-            message={errorMessage}
-            onRetry={onRetry}
-          />
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <StatCard label="Links" value={stats.links} />
-      <StatCard label="Clicks" value={stats.clicks} />
-      <StatCard label="Unique visitors" value={stats.uniqueVisitors} />
-      <StatCard label="Active" value={stats.active} />
+      <StatCard label="Links" value={overview.links} />
+      <StatCard label="Clicks" value={overview.clicks} />
+      <StatCard label="Unique visitors" value={overview.uniqueVisitors} />
+      <StatCard label="Active" value={overview.active} />
     </div>
   );
 }

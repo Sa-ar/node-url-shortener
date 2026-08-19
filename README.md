@@ -220,6 +220,7 @@ Sign in at `/login`. From the dashboard, use **Invite** to copy a one-time regis
 | `NEXTAUTH_URL` | App origin NextAuth signs against | `http://localhost:3000` | `https://saar.to` |
 | `NEXTAUTH_SECRET` | Secret used to sign sessions | any long random string | long random secret |
 | `VERCEL_TOKEN` / `VERCEL_PROJECT_ID` / `VERCEL_TEAM_ID` | _(optional)_ auto-attach `slug.saar.to` premium domains | usually unset | set to enable premium subdomains |
+| `BLOB_READ_WRITE_TOKEN` | _(optional)_ Vercel Blob uploads for file links | usually unset | set to enable file uploads |
 
 On Vercel **Preview** deployments, leave `NEXTAUTH_URL` and `NEXT_PUBLIC_BASE_URL` unset so the app uses `VERCEL_URL`. Never commit `.env.local` or secrets.
 
