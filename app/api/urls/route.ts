@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { ShortUrl } from "@/lib/models/short-url";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/urls";
 import { createUrlSchema } from "@/lib/validations/url";
 import { ensureVanityDomain } from "@/lib/vercel-domains";
+import { refreshShortUrlUnfurlById } from "@/lib/unfurl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,6 +110,9 @@ export async function POST(request: Request) {
     }
 
     const dto = serializeShortUrl(doc, getBaseUrl(request));
+    after(async () => {
+      await refreshShortUrlUnfurlById(doc._id.toString());
+    });
     revalidateUrlCaches();
     return NextResponse.json(
       domainWarning ? { ...dto, domainWarning } : dto,
