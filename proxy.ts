@@ -5,9 +5,12 @@ import { getApexOrigin, parseVanityLabel } from "@/lib/hosts";
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
+    pathname === "/new" ||
     pathname.startsWith("/stats") ||
     pathname.startsWith("/api/urls") ||
-    pathname.startsWith("/api/invites")
+    pathname.startsWith("/api/invites") ||
+    pathname.startsWith("/api/stats") ||
+    pathname.startsWith("/api/blob")
   );
 }
 
@@ -65,6 +68,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/new",
     "/login",
     "/register",
     "/stats/:path*",

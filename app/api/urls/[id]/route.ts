@@ -11,6 +11,8 @@ import {
   shortUrlKind,
 } from "@/lib/urls";
 import { editUrlSchema } from "@/lib/validations/url";
+import { assignFileTarget, deleteStoredBlob } from "@/lib/files";
+import { hashLinkPassword } from "@/lib/link-gate";
 import { ensureVanityDomain, removeVanityDomain } from "@/lib/vercel-domains";
 import { refreshShortUrlUnfurlById } from "@/lib/unfurl";
 
@@ -77,8 +79,40 @@ export async function PATCH(request: Request, context: RouteContext) {
     fullUrl: read("fullUrl"),
     slug: read("slug") === undefined ? doc.short : String(read("slug") ?? ""),
     expiresAt: read("expiresAt") === undefined ? "" : String(read("expiresAt") ?? ""),
-    // The link's kind is immutable; ignore any client-provided value.
     kind,
+    target:
+      read("target") === undefined
+        ? doc.target === "file"
+          ? "file"
+          : "url"
+        : read("target") === "file"
+          ? "file"
+          : "url",
+    disposition:
+      read("disposition") === "attachment" || doc.disposition === "attachment"
+        ? "attachment"
+        : "inline",
+    fileName: read("fileName") === undefined ? doc.fileName ?? "" : String(read("fileName") ?? ""),
+    contentType:
+      read("contentType") === undefined
+        ? doc.contentType ?? ""
+        : String(read("contentType") ?? ""),
+    fileSize:
+      typeof read("fileSize") === "number" ? read("fileSize") : doc.fileSize ?? undefined,
+    fileSource:
+      read("fileSource") === "blob" || read("fileSource") === "external"
+        ? read("fileSource")
+        : doc.fileSource ?? undefined,
+    note: read("note") === undefined ? doc.note ?? "" : String(read("note") ?? ""),
+    password: String(read("password") ?? ""),
+    removePassword: read("removePassword") === true,
+    ogTitle: read("ogTitle") === undefined ? doc.ogTitle ?? "" : String(read("ogTitle") ?? ""),
+    ogDescription:
+      read("ogDescription") === undefined
+        ? doc.ogDescription ?? ""
+        : String(read("ogDescription") ?? ""),
+    ogImageUrl:
+      read("ogImageUrl") === undefined ? doc.ogImageUrl ?? "" : String(read("ogImageUrl") ?? ""),
   });
 
   if (!parsed.success) {
@@ -87,13 +121,24 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const previousShort = doc.short;
+  const previousFull = doc.full;
+  const previousSource = doc.fileSource;
   const nextShort = parsed.data.slug;
   const shortChanged = nextShort !== previousShort;
 
-  doc.full = parsed.data.fullUrl;
   doc.expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
   if (shortChanged) {
     doc.short = nextShort;
+  }
+  assignFileTarget(doc, parsed.data);
+  doc.note = parsed.data.note?.trim() ? parsed.data.note.trim().slice(0, 500) : null;
+  doc.ogTitle = parsed.data.ogTitle ?? null;
+  doc.ogDescription = parsed.data.ogDescription ?? null;
+  doc.ogImageUrl = parsed.data.ogImageUrl ?? null;
+  if (parsed.data.removePassword) {
+    doc.passwordHash = null;
+  } else if (parsed.data.password) {
+    doc.passwordHash = await hashLinkPassword(parsed.data.password);
   }
 
   try {
@@ -127,8 +172,19 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const dto = serializeShortUrl(doc, getBaseUrl(request));
   after(async () => {
-    await refreshShortUrlUnfurlById(doc._id.toString());
+    if (doc.target === "url") {
+      await refreshShortUrlUnfurlById(doc._id.toString());
+    }
   });
+
+  if (
+    previousSource === "blob" &&
+    previousFull &&
+    (parsed.data.target !== "file" || parsed.data.fullUrl !== previousFull)
+  ) {
+    await deleteStoredBlob(previousFull);
+  }
+
   revalidateUrlCaches();
   return NextResponse.json(domainWarning ? { ...dto, domainWarning } : dto);
 }
@@ -153,7 +209,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
   const kind = shortUrlKind(doc);
   const label = doc.short;
+  const blobUrl = doc.fileSource === "blob" ? doc.full : null;
   await doc.deleteOne();
+
+  if (blobUrl) {
+    await deleteStoredBlob(blobUrl);
+  }
 
   if (kind === "subdomain") {
     await removeVanityDomain(label);

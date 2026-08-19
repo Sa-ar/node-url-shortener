@@ -36,16 +36,10 @@ export function filterUrls(
     return (
       url.full.toLowerCase().includes(query) ||
       url.short.toLowerCase().includes(query) ||
-      url.shortUrl.toLowerCase().includes(query)
+      url.shortUrl.toLowerCase().includes(query) ||
+      (url.fileName ?? "").toLowerCase().includes(query) ||
+      (url.note ?? "").toLowerCase().includes(query)
     );
   });
 }
 
-export function summarizeUrls(urls: ShortUrlDto[]) {
-  return {
-    links: urls.length,
-    clicks: urls.reduce((total, url) => total + url.clicks, 0),
-    active: urls.filter((url) => !url.expired).length,
-    expired: urls.filter((url) => url.expired).length,
-  };
-}

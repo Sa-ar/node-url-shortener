@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAllowedFileType, mustForceAttachment } from "@/lib/file-types";
 
 /**
  * First-path segments the app serves itself (see `proxy.ts` and the `app/`
@@ -8,6 +9,7 @@ import { z } from "zod";
 export const RESERVED_SLUGS = new Set([
   "api",
   "stats",
+  "new",
   "login",
   "register",
   "signin",
@@ -141,16 +143,76 @@ const baseUrlObject = z.object({
   slug: z.string(),
   expiresAt: z.string(),
   kind: z.enum(["path", "subdomain"]),
+  target: z.enum(["url", "file"]).default("url"),
+  disposition: z.enum(["inline", "attachment"]).optional(),
+  fileName: z.string().optional(),
+  contentType: z.string().optional(),
+  fileSize: z.number().optional(),
+  fileSource: z.enum(["blob", "external"]).optional(),
+  note: z.string().optional(),
+  password: z.string().optional(),
+  removePassword: z.boolean().optional(),
+  ogTitle: z.string().optional(),
+  ogDescription: z.string().optional(),
+  ogImageUrl: z.string().optional(),
 });
+
+function addFileIssues(
+  data: {
+    target: "url" | "file";
+    fileName?: string;
+    contentType?: string;
+    fileSource?: "blob" | "external";
+    fileSize?: number;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (data.target !== "file") {
+    return;
+  }
+
+  if (!data.fileName?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "File name is required",
+      path: ["fileName"],
+    });
+  }
+
+  if (data.fileSource !== "blob" && data.fileSource !== "external") {
+    ctx.addIssue({
+      code: "custom",
+      message: "Upload a file or paste an https file URL",
+      path: ["fileSource"],
+    });
+  }
+
+  const contentType = data.contentType?.trim() ?? "";
+  if (contentType && !isAllowedFileType(contentType) && mustForceAttachment(contentType)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "That file type is not allowed",
+      path: ["contentType"],
+    });
+  } else if (contentType && !isAllowedFileType(contentType)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Use a PDF, image, zip, or Office document",
+      path: ["contentType"],
+    });
+  }
+}
 
 export const createUrlSchema = baseUrlObject
   .superRefine((data, ctx) => {
     addSlugIssues(data.slug, data.kind, ctx, false);
     addExpiryIssues(data.expiresAt, ctx);
+    addFileIssues(data, ctx);
   })
   .transform((data) => {
     const kind = data.kind;
     const slug = data.slug.trim();
+    const target = data.target === "file" ? "file" : "url";
     return {
       fullUrl: data.fullUrl,
       slug:
@@ -161,6 +223,23 @@ export const createUrlSchema = baseUrlObject
             : slug,
       expiresAt: data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
       kind,
+      target: target === "file" ? ("file" as const) : ("url" as const),
+      disposition:
+        target === "file"
+          ? data.disposition === "attachment"
+            ? ("attachment" as const)
+            : ("inline" as const)
+          : undefined,
+      fileName: target === "file" ? data.fileName?.trim() : undefined,
+      contentType: target === "file" ? data.contentType?.trim() : undefined,
+      fileSize: target === "file" ? data.fileSize : undefined,
+      fileSource: target === "file" ? data.fileSource : undefined,
+      note: data.note?.trim() ? data.note.trim().slice(0, 500) : undefined,
+      password: data.password?.trim() || undefined,
+      removePassword: data.removePassword === true,
+      ogTitle: data.ogTitle?.trim() || undefined,
+      ogDescription: data.ogDescription?.trim() || undefined,
+      ogImageUrl: data.ogImageUrl?.trim() || undefined,
     };
   });
 
@@ -172,15 +251,34 @@ export const editUrlSchema = baseUrlObject
   .superRefine((data, ctx) => {
     addSlugIssues(data.slug, data.kind, ctx, true);
     addExpiryIssues(data.expiresAt, ctx);
+    addFileIssues(data, ctx);
   })
   .transform((data) => {
     const kind = data.kind;
     const slug = data.slug.trim();
+    const target = data.target === "file" ? "file" : "url";
     return {
       fullUrl: data.fullUrl,
       slug: kind === "subdomain" ? slug.toLowerCase() : slug,
       expiresAt: data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
       kind,
+      target: target === "file" ? ("file" as const) : ("url" as const),
+      disposition:
+        target === "file"
+          ? data.disposition === "attachment"
+            ? ("attachment" as const)
+            : ("inline" as const)
+          : undefined,
+      fileName: target === "file" ? data.fileName?.trim() : undefined,
+      contentType: target === "file" ? data.contentType?.trim() : undefined,
+      fileSize: target === "file" ? data.fileSize : undefined,
+      fileSource: target === "file" ? data.fileSource : undefined,
+      note: data.note?.trim() ? data.note.trim().slice(0, 500) : undefined,
+      password: data.password?.trim() || undefined,
+      removePassword: data.removePassword === true,
+      ogTitle: data.ogTitle?.trim() || undefined,
+      ogDescription: data.ogDescription?.trim() || undefined,
+      ogImageUrl: data.ogImageUrl?.trim() || undefined,
     };
   });
 

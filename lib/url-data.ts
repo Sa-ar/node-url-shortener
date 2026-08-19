@@ -1,6 +1,7 @@
 import { revalidateTag, unstable_cache } from "next/cache";
 import { connectDB } from "@/lib/db";
 import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
+import { User } from "@/lib/models/user";
 import { isOwnerRole } from "@/lib/roles";
 import {
   findAccessibleShortUrl,
@@ -16,9 +17,28 @@ function viewerKey(userId: string, role: string | null | undefined) {
 
 function toDto(
   doc: ShortUrlAttrs & { _id: { toString(): string } },
-  baseUrl: string
+  baseUrl: string,
+  createdByName?: string | null
 ): ShortUrlDto {
-  return serializeShortUrl(doc, baseUrl);
+  return serializeShortUrl(doc, baseUrl, { createdByName: createdByName ?? null });
+}
+
+async function creatorNames(
+  docs: Array<{ userId: { toString(): string } }>,
+  ownerView: boolean
+) {
+  if (!ownerView) {
+    return new Map<string, string>();
+  }
+
+  const users = await User.find({
+    _id: { $in: docs.map((doc) => doc.userId) },
+  }).select("name");
+  const names = new Map<string, string>();
+  for (const user of users) {
+    names.set(user._id.toString(), user.name);
+  }
+  return names;
 }
 
 const getCachedUrlList = unstable_cache(
@@ -26,7 +46,10 @@ const getCachedUrlList = unstable_cache(
     await connectDB();
     const filter = key === "owner" ? {} : { userId };
     const docs = await ShortUrl.find(filter).sort({ createdAt: -1 }).lean();
-    return docs.map((doc) => toDto(doc, baseUrl));
+    const names = await creatorNames(docs, key === "owner");
+    return docs.map((doc) =>
+      toDto(doc, baseUrl, names.get(doc.userId.toString()) ?? null)
+    );
   },
   ["url-list"],
   { revalidate: 60, tags: [URLS_CACHE_TAG] }
@@ -36,7 +59,15 @@ const getCachedUrl = unstable_cache(
   async (id: string, userId: string, role: string, baseUrl: string) => {
     await connectDB();
     const doc = await findAccessibleShortUrl(id, userId, role);
-    return doc ? toDto(doc, baseUrl) : null;
+    if (!doc) {
+      return null;
+    }
+    let createdByName: string | null = null;
+    if (isOwnerRole(role)) {
+      const user = await User.findById(doc.userId).select("name");
+      createdByName = user?.name ?? null;
+    }
+    return toDto(doc, baseUrl, createdByName);
   },
   ["url-one"],
   { revalidate: 60, tags: [URLS_CACHE_TAG] }

@@ -22,13 +22,12 @@ export function EditUrlDialog({
 }) {
   return (
     <Dialog open={url !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[min(90dvh,40rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit link</DialogTitle>
           <DialogDescription>
-            {url?.kind === "subdomain"
-              ? "Update the destination, subdomain, or expiry for this premium link."
-              : "Update the destination, slug, or expiry. Changing the slug updates the short URL."}
+            Change the destination on Link. Password, expiry, and preview live
+            under Options.
           </DialogDescription>
         </DialogHeader>
         {url ? (

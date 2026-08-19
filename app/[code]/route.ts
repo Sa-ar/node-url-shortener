@@ -1,32 +1,21 @@
 import { notFound } from "next/navigation";
-import { handleShortLink } from "@/lib/handle-short-link";
-import { RESERVED_SLUGS } from "@/lib/validations/url";
+import { handlePublicRequest } from "@/lib/public-hit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function handle(
   request: Request,
   context: { params: Promise<{ code: string }> }
 ) {
   const { code } = await context.params;
-
-  if (RESERVED_SLUGS.has(code.toLowerCase())) {
+  const response = await handlePublicRequest(request, code, "path");
+  if (!response) {
     notFound();
   }
-
-  return handleShortLink(request, code, "path");
+  return response;
 }
 
-export async function HEAD(
-  request: Request,
-  context: { params: Promise<{ code: string }> }
-) {
-  const { code } = await context.params;
-
-  if (RESERVED_SLUGS.has(code.toLowerCase())) {
-    notFound();
-  }
-
-  return handleShortLink(request, code, "path");
-}
+export const GET = handle;
+export const HEAD = handle;
+export const POST = handle;

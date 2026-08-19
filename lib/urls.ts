@@ -1,11 +1,10 @@
 import mongoose from "mongoose";
-import { isExpired, utcDateString } from "@/lib/dates";
+import { isExpired } from "@/lib/dates";
 import { vanityShortUrl } from "@/lib/hosts";
 import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
 import type { DailyClick, ShortUrlDto } from "@/lib/types";
 
 const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
-const DAILY_CLICK_RETENTION_DAYS = 30;
 
 export function getBaseUrl(request?: Request) {
   if (process.env.NEXT_PUBLIC_BASE_URL) {
@@ -29,12 +28,19 @@ export function shortUrlKind(
   return doc.kind === "subdomain" ? "subdomain" : "path";
 }
 
+export function shortUrlTarget(
+  doc: Pick<ShortUrlAttrs, "target"> | { target?: string | null }
+): "url" | "file" {
+  return doc.target === "file" ? "file" : "url";
+}
+
 export function serializeShortUrl(
   doc: Omit<ShortUrlAttrs, "dailyClicks"> & {
     _id: { toString(): string };
     dailyClicks?: DailyClick[];
   },
-  baseUrl: string
+  baseUrl: string,
+  extras?: { createdByName?: string | null }
 ): ShortUrlDto {
   const kind = shortUrlKind(doc);
   return {
@@ -46,6 +52,18 @@ export function serializeShortUrl(
         ? vanityShortUrl(doc.short)
         : `${baseUrl}/${doc.short}`,
     kind,
+    target: shortUrlTarget(doc),
+    disposition: doc.disposition === "attachment" ? "attachment" : doc.disposition === "inline" ? "inline" : null,
+    fileName: doc.fileName ?? null,
+    contentType: doc.contentType ?? null,
+    fileSize: doc.fileSize ?? null,
+    fileSource: doc.fileSource === "blob" || doc.fileSource === "external" ? doc.fileSource : null,
+    note: doc.note ?? null,
+    createdByName: extras?.createdByName ?? null,
+    hasPassword: Boolean(doc.passwordHash),
+    ogTitle: doc.ogTitle ?? null,
+    ogDescription: doc.ogDescription ?? null,
+    ogImageUrl: doc.ogImageUrl ?? null,
     clicks: doc.clicks,
     expiresAt: doc.expiresAt ? new Date(doc.expiresAt).toISOString() : null,
     lastAccessedAt: doc.lastAccessedAt
@@ -101,21 +119,7 @@ export function findAccessibleShortUrl(
 export function recordClick(doc: {
   clicks: number;
   lastAccessedAt?: Date | null;
-  dailyClicks: DailyClick[];
 }) {
-  const today = utcDateString();
-  const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - DAILY_CLICK_RETENTION_DAYS);
-  const cutoffKey = utcDateString(cutoff);
-
-  const bucket = doc.dailyClicks.find((entry) => entry.date === today);
-  if (bucket) {
-    bucket.count += 1;
-  } else {
-    doc.dailyClicks.push({ date: today, count: 1 });
-  }
-
-  doc.dailyClicks = doc.dailyClicks.filter((entry) => entry.date >= cutoffKey);
   doc.clicks += 1;
   doc.lastAccessedAt = new Date();
 }
