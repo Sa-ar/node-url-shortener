@@ -1,4 +1,10 @@
-import type { CreateUrlBody, ShortUrlDto, UpdateUrlBody } from "@/lib/types";
+import type {
+  CreateUrlBody,
+  OverviewStatsDto,
+  ShortUrlDto,
+  UpdateUrlBody,
+  UrlClicksDto,
+} from "@/lib/types";
 
 type ErrorBody = {
   error?: string;
@@ -39,6 +45,21 @@ export async function fetchUrls() {
 export async function fetchUrl(id: string) {
   const response = await fetch(`/api/urls/${id}`, { cache: "no-store" });
   return parseJson<ShortUrlDto>(response);
+}
+
+export async function fetchOverviewStats(excludeBots: boolean) {
+  const response = await fetch(`/api/stats/overview?excludeBots=${excludeBots}`, {
+    cache: "no-store",
+  });
+  return parseJson<OverviewStatsDto>(response);
+}
+
+export async function fetchUrlClicks(id: string, excludeBots: boolean) {
+  const response = await fetch(
+    `/api/urls/${id}/clicks?excludeBots=${excludeBots}`,
+    { cache: "no-store" }
+  );
+  return parseJson<UrlClicksDto>(response);
 }
 
 export async function createUrl(input: CreateUrlBody) {

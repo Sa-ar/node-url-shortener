@@ -1,11 +1,10 @@
 import mongoose from "mongoose";
-import { isExpired, utcDateString } from "@/lib/dates";
+import { isExpired } from "@/lib/dates";
 import { vanityShortUrl } from "@/lib/hosts";
 import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
 import type { DailyClick, ShortUrlDto } from "@/lib/types";
 
 const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
-const DAILY_CLICK_RETENTION_DAYS = 30;
 
 export function getBaseUrl(request?: Request) {
   if (process.env.NEXT_PUBLIC_BASE_URL) {
@@ -101,21 +100,7 @@ export function findAccessibleShortUrl(
 export function recordClick(doc: {
   clicks: number;
   lastAccessedAt?: Date | null;
-  dailyClicks: DailyClick[];
 }) {
-  const today = utcDateString();
-  const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - DAILY_CLICK_RETENTION_DAYS);
-  const cutoffKey = utcDateString(cutoff);
-
-  const bucket = doc.dailyClicks.find((entry) => entry.date === today);
-  if (bucket) {
-    bucket.count += 1;
-  } else {
-    doc.dailyClicks.push({ date: today, count: 1 });
-  }
-
-  doc.dailyClicks = doc.dailyClicks.filter((entry) => entry.date >= cutoffKey);
   doc.clicks += 1;
   doc.lastAccessedAt = new Date();
 }

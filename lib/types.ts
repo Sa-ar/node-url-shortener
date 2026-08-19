@@ -34,3 +34,42 @@ export type UpdateUrlBody = {
   slug: string;
   expiresAt?: string;
 };
+
+export type OverviewStatsDto = {
+  links: number;
+  clicks: number;
+  uniqueVisitors: number;
+  active: number;
+};
+
+export type ClickBreakdownEntry = {
+  label: string;
+  count: number;
+};
+
+export type ClickEventDto = {
+  id: string;
+  createdAt: string;
+  country: string;
+  region: string;
+  city: string;
+  deviceType: string;
+  browser: string;
+  browserVersion: string;
+  referrerHost: string;
+  ip: string;
+  isBot: boolean;
+};
+
+export type UrlClicksDto = {
+  clicks: number;
+  uniqueVisitors: number;
+  daily: DailyClick[];
+  breakdowns: {
+    country: ClickBreakdownEntry[];
+    referrer: ClickBreakdownEntry[];
+    device: ClickBreakdownEntry[];
+    browser: ClickBreakdownEntry[];
+  };
+  recent: ClickEventDto[];
+};

@@ -240,7 +240,7 @@ export function UrlTable({
           },
         }),
       ]),
-    [copiedId]
+    [copiedId, queryClient]
   );
 
   const table = useTable({

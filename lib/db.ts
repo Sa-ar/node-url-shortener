@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ClickEvent } from "@/lib/models/click-event";
 import { ensureUserRoles } from "@/lib/roles";
 import { ShortUrl } from "@/lib/models/short-url";
 
@@ -44,11 +45,16 @@ async function ensureShortUrlIndexes() {
   await ShortUrl.createIndexes();
 }
 
+async function ensureClickEventIndexes() {
+  await ClickEvent.createIndexes();
+}
+
 function scheduleEnsure() {
   if (!cached.ensure) {
     cached.ensure = (async () => {
       try {
         await ensureShortUrlIndexes();
+        await ensureClickEventIndexes();
         await ensureUserRoles();
       } catch (error) {
         cached.ensure = null;

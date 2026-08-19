@@ -1,19 +1,26 @@
-import { summarizeUrls } from "@/lib/dashboard";
-import type { ShortUrlDto } from "@/lib/types";
+import type { OverviewStatsDto } from "@/lib/types";
+import { ErrorState } from "@/components/query-state";
 import {
   Card,
   CardDescription,
+  CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function UrlOverview({
-  urls,
+  stats,
   isPending = false,
+  isError = false,
+  errorMessage,
+  onRetry,
 }: {
-  urls: ShortUrlDto[];
+  stats?: OverviewStatsDto;
   isPending?: boolean;
+  isError?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
 }) {
   if (isPending) {
     return (
@@ -30,14 +37,27 @@ export function UrlOverview({
     );
   }
 
-  const stats = summarizeUrls(urls);
+  if (isError || !stats) {
+    return (
+      <Card>
+        <CardContent>
+          <ErrorState
+            className="py-8"
+            title="Could not load overview"
+            message={errorMessage}
+            onRetry={onRetry}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard label="Links" value={stats.links} />
       <StatCard label="Clicks" value={stats.clicks} />
+      <StatCard label="Unique visitors" value={stats.uniqueVisitors} />
       <StatCard label="Active" value={stats.active} />
-      <StatCard label="Expired" value={stats.expired} />
     </div>
   );
 }

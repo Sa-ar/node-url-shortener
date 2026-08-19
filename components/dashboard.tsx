@@ -3,12 +3,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { fetchUrls } from "@/lib/api";
+import { fetchOverviewStats, fetchUrls } from "@/lib/api";
 import {
   filterUrls,
   type LinkStatusFilter,
 } from "@/lib/dashboard";
-import { urlsQueryKey } from "@/lib/query";
+import { overviewStatsQueryKey, urlsQueryKey } from "@/lib/query";
 import { CreateUrlDialog } from "@/components/create-url-dialog";
 import { InviteDialog } from "@/components/invite-dialog";
 import { PageShell } from "@/components/page-shell";
@@ -23,14 +23,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<LinkStatusFilter>("all");
+  const [excludeBots, setExcludeBots] = useState(false);
   const query = useQuery({
     queryKey: urlsQueryKey,
     queryFn: fetchUrls,
+  });
+  const overviewQuery = useQuery({
+    queryKey: overviewStatsQueryKey(excludeBots),
+    queryFn: () => fetchOverviewStats(excludeBots),
   });
 
   const allUrls = useMemo(() => query.data ?? [], [query.data]);
@@ -70,7 +76,7 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -95,9 +101,25 @@ export function Dashboard({ isOwner = false }: { isOwner?: boolean }) {
             <SelectItem value="expired">Expired</SelectItem>
           </SelectContent>
         </Select>
+        <label className="flex items-center gap-3 self-start rounded-full border px-3 py-2 text-sm sm:self-auto">
+          <span className="font-medium">Hide bots</span>
+          <Switch checked={excludeBots} onCheckedChange={setExcludeBots} />
+        </label>
       </div>
 
-      <UrlOverview urls={filteredUrls} isPending={query.isPending} />
+      <UrlOverview
+        stats={overviewQuery.data}
+        isPending={overviewQuery.isPending}
+        isError={overviewQuery.isError}
+        errorMessage={
+          overviewQuery.error instanceof Error
+            ? overviewQuery.error.message
+            : undefined
+        }
+        onRetry={() => {
+          void overviewQuery.refetch();
+        }}
+      />
 
       <UrlTable
         urls={filteredUrls}
