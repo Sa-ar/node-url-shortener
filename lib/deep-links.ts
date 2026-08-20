@@ -15,9 +15,19 @@ type AppLinkOptions = {
   fallbackUrl: string;
 };
 
+/** Intent extras are `;`-delimited; encode `;` in the hierarchical part. */
+function encodeIntentSegment(value: string) {
+  return value.replace(/;/g, "%3B");
+}
+
 function buildAndroidIntentUrl(url: URL, packageName: string) {
   const scheme = url.protocol.replace(/:$/, "");
-  const path = `${url.hostname}${url.pathname}${url.search}${url.hash}`;
+  const path = [
+    url.hostname,
+    encodeIntentSegment(url.pathname),
+    encodeIntentSegment(url.search),
+    encodeIntentSegment(url.hash),
+  ].join("");
   const fallback = encodeURIComponent(url.toString());
   return `intent://${path}#Intent;scheme=${scheme};package=${packageName};S.browser_fallback_url=${fallback};end`;
 }

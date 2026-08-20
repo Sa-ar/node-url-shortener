@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { Agent, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from "undici";
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 const BLOCKED_HOSTNAMES = new Set([
@@ -7,6 +8,13 @@ const BLOCKED_HOSTNAMES = new Set([
   "metadata.google.internal",
   "metadata",
 ]);
+
+export type SafeOutboundTarget = {
+  url: URL;
+  /** Address used for the TCP connection (DNS-pinned). */
+  address: string;
+  family: 4 | 6;
+};
 
 function ipv4ToInt(address: string) {
   return address
@@ -39,8 +47,29 @@ function isBlockedIpv4(address: string) {
   );
 }
 
+function extractMappedIpv4(address: string): string | null {
+  const normalized = address.toLowerCase();
+  if (normalized.startsWith("::ffff:")) {
+    const mapped = normalized.slice("::ffff:".length);
+    return isIP(mapped) === 4 ? mapped : null;
+  }
+
+  // Deprecated IPv4-compatible form ::a.b.c.d (not ::ffff:)
+  if (normalized.startsWith("::") && normalized.includes(".")) {
+    const mapped = normalized.slice(2);
+    return isIP(mapped) === 4 ? mapped : null;
+  }
+
+  return null;
+}
+
 function isBlockedIpv6(address: string) {
   const normalized = address.toLowerCase();
+  const mappedIpv4 = extractMappedIpv4(normalized);
+  if (mappedIpv4) {
+    return isBlockedIpv4(mappedIpv4);
+  }
+
   return (
     normalized === "::" ||
     normalized === "::1" ||
@@ -67,7 +96,10 @@ function isBlockedIp(address: string) {
   return false;
 }
 
-export async function assertSafeOutboundUrl(input: URL) {
+/** Resolve and validate an outbound URL, pinning a single safe address for connect. */
+export async function resolveSafeOutboundUrl(
+  input: URL
+): Promise<SafeOutboundTarget> {
   if (!ALLOWED_PROTOCOLS.has(input.protocol)) {
     throw new Error("Only http(s) URLs are allowed");
   }
@@ -81,10 +113,14 @@ export async function assertSafeOutboundUrl(input: URL) {
     if (isBlockedIp(hostname)) {
       throw new Error("Blocked IP address");
     }
-    return;
+    return {
+      url: input,
+      address: hostname,
+      family: isIP(hostname) === 6 ? 6 : 4,
+    };
   }
 
-  const addresses = await lookup(hostname, { all: true });
+  const addresses = await lookup(hostname, { all: true, verbatim: true });
   if (addresses.length === 0) {
     throw new Error("Hostname did not resolve");
   }
@@ -94,4 +130,41 @@ export async function assertSafeOutboundUrl(input: URL) {
       throw new Error("Blocked resolved IP address");
     }
   }
+
+  const pinned = addresses[0];
+  if (!pinned) {
+    throw new Error("Hostname did not resolve");
+  }
+
+  return {
+    url: input,
+    address: pinned.address,
+    family: pinned.family === 6 ? 6 : 4,
+  };
+}
+
+export async function assertSafeOutboundUrl(input: URL) {
+  await resolveSafeOutboundUrl(input);
+}
+
+/**
+ * Fetch using a dispatcher whose DNS lookup always returns the pinned address,
+ * so a rebinding hostname cannot change the peer between check and connect.
+ */
+export function fetchPinned(
+  target: SafeOutboundTarget,
+  init?: UndiciRequestInit
+) {
+  const dispatcher = new Agent({
+    connect: {
+      lookup(_hostname, _options, callback) {
+        callback(null, target.address, target.family);
+      },
+    },
+  });
+
+  return undiciFetch(target.url, {
+    ...init,
+    dispatcher,
+  });
 }

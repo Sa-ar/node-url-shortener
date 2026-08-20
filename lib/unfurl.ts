@@ -1,5 +1,5 @@
 import { ShortUrl, type ShortUrlDoc, type ShortUrlMetaTag, type ShortUrlUnfurl } from "@/lib/models/short-url";
-import { assertSafeOutboundUrl } from "@/lib/ssrf";
+import { fetchPinned, resolveSafeOutboundUrl } from "@/lib/ssrf";
 
 const MAX_UNFURL_BYTES = 512 * 1024;
 const REDIRECT_LIMIT = 5;
@@ -119,14 +119,14 @@ async function fetchHtml(input: URL, timeoutMs: number): Promise<FetchHtmlResult
   let current = input;
 
   for (let attempt = 0; attempt <= REDIRECT_LIMIT; attempt += 1) {
-    await assertSafeOutboundUrl(current);
+    const target = await resolveSafeOutboundUrl(current);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
     try {
-      response = await fetch(current, {
+      response = (await fetchPinned(target, {
         method: "GET",
         redirect: "manual",
         signal: controller.signal,
@@ -134,7 +134,7 @@ async function fetchHtml(input: URL, timeoutMs: number): Promise<FetchHtmlResult
           accept: "text/html,application/xhtml+xml",
           "user-agent": "saar.to unfurl bot/1.0",
         },
-      });
+      })) as unknown as Response;
     } finally {
       clearTimeout(timer);
     }

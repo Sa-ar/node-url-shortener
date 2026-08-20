@@ -44,9 +44,19 @@ async function getPreviewUnfurl(doc: Awaited<ReturnType<typeof resolvePublicHit>
   }
 }
 
+/** Embed a string in an HTML <script> without letting </script> close the tag early. */
+function jsonForInlineScript(value: string) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function buildIosTrampolineScript(appUrl: string, fallbackUrl: string) {
-  const app = JSON.stringify(appUrl);
-  const fallback = JSON.stringify(fallbackUrl);
+  const app = jsonForInlineScript(appUrl);
+  const fallback = jsonForInlineScript(fallbackUrl);
 
   return `
 let leftPage = false;

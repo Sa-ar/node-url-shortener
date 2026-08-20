@@ -123,7 +123,9 @@ export function ogPage(
 
   lines.push("  </head>", "  <body>", `    <p>${escapeHtml(title)}</p>`);
   if (options?.script) {
-    lines.push(`    <script>${options.script}</script>`);
+    // Keep </script> from ending the element early if a payload slips past callers.
+    const safeScript = options.script.replace(/<\/(script)/gi, "<\\/$1");
+    lines.push(`    <script>${safeScript}</script>`);
   }
   lines.push("  </body>", "</html>");
 
