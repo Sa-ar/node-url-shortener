@@ -2,7 +2,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ShortUrlDto } from "@/lib/types";
 
 export const urlsQueryKey = ["urls"] as const;
+export const overviewStatsQueryKey = (excludeBots: boolean) =>
+  ["overview-stats", excludeBots] as const;
 export const urlQueryKey = (id: string) => ["url", id] as const;
+export const urlClicksQueryKey = (id: string, excludeBots: boolean) =>
+  ["url-clicks", id, excludeBots] as const;
 
 export const QUERY_STALE_TIME_MS = 5 * 60 * 1000;
 export const QUERY_GC_TIME_MS = 30 * 60 * 1000;
