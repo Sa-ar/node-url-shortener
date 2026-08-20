@@ -47,15 +47,50 @@ function isBlockedIpv4(address: string) {
   );
 }
 
+/** Decode ::ffff:7f00:1-style hex mapped IPv4 into dotted decimal. */
+function parseHexMappedIpv4(mapped: string): string | null {
+  const parts = mapped.split(":");
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const high = Number.parseInt(parts[0] ?? "", 16);
+  const low = Number.parseInt(parts[1] ?? "", 16);
+  if (
+    !Number.isFinite(high) ||
+    !Number.isFinite(low) ||
+    high < 0 ||
+    low < 0 ||
+    high > 0xffff ||
+    low > 0xffff
+  ) {
+    return null;
+  }
+
+  return `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
+}
+
 function extractMappedIpv4(address: string): string | null {
-  const normalized = address.toLowerCase();
-  if (normalized.startsWith("::ffff:")) {
-    const mapped = normalized.slice("::ffff:".length);
-    return isIP(mapped) === 4 ? mapped : null;
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "");
+
+  // Dotted form: ::ffff:127.0.0.1 or 0:0:0:0:0:ffff:127.0.0.1
+  const dotted = normalized.match(/(?:^|:)ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (dotted?.[1] && isIP(dotted[1]) === 4) {
+    return dotted[1];
+  }
+
+  // Hex form used by AAAA records: ::ffff:7f00:1 / ::ffff:a9fe:a9fe
+  const hex = normalized.match(/(?:^|:)ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    return parseHexMappedIpv4(`${hex[1]}:${hex[2]}`);
   }
 
   // Deprecated IPv4-compatible form ::a.b.c.d (not ::ffff:)
-  if (normalized.startsWith("::") && normalized.includes(".")) {
+  if (
+    normalized.startsWith("::") &&
+    !normalized.includes(":ffff:") &&
+    normalized.includes(".")
+  ) {
     const mapped = normalized.slice(2);
     return isIP(mapped) === 4 ? mapped : null;
   }
@@ -64,7 +99,15 @@ function extractMappedIpv4(address: string): string | null {
 }
 
 function isBlockedIpv6(address: string) {
-  const normalized = address.toLowerCase();
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "");
+
+  // Any IPv4-mapped form must be judged as its embedded IPv4. Unparseable
+  // mapped addresses are blocked rather than treated as safe public IPv6.
+  if (/(?:^|:)ffff:/i.test(normalized)) {
+    const mappedIpv4 = extractMappedIpv4(normalized);
+    return mappedIpv4 ? isBlockedIpv4(mappedIpv4) : true;
+  }
+
   const mappedIpv4 = extractMappedIpv4(normalized);
   if (mappedIpv4) {
     return isBlockedIpv4(mappedIpv4);

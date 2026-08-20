@@ -119,7 +119,13 @@ export async function handlePublicRequest(
   const target = shortUrlTarget(doc);
   const deepLinkMatch = target === "url" ? getDeepLinkMatch(doc.full) : null;
 
-  if (preview && (hasCustomOg(doc) || locked)) {
+  // Locked links: crawlers get safe placeholder OG only — never destination
+  // App Links, forwarded unfurl, or deep-link metadata.
+  if (preview && locked) {
+    return ogPage(doc, canonical);
+  }
+
+  if (preview && hasCustomOg(doc)) {
     return ogPage(doc, canonical, { extraAppLinks: deepLinkMatch?.appLinks });
   }
 

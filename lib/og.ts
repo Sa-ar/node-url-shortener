@@ -67,7 +67,10 @@ export function ogPage(
   }
 ) {
   const protectedLink = Boolean(doc.passwordHash);
-  const unfurl = options?.forwardedUnfurl ?? doc.unfurl ?? null;
+  // Password-gated links must not emit destination unfurl / App Links metadata.
+  const unfurl = protectedLink
+    ? null
+    : options?.forwardedUnfurl ?? doc.unfurl ?? null;
   const title =
     protectedLink && !doc.ogTitle
       ? "Protected link · saar.to"
@@ -80,8 +83,16 @@ export function ogPage(
     protectedLink && !doc.ogDescription
       ? "This saar.to link is password protected."
       : doc.ogDescription || unfurl?.description || "A saar.to short link.";
-  const image = protectedLink && !doc.ogImageUrl ? "" : doc.ogImageUrl || unfurl?.image || "";
-  const appLinks = uniqueMetaTags([...(unfurl?.appLinks ?? []), ...(options?.extraAppLinks ?? [])]);
+  const image =
+    protectedLink && !doc.ogImageUrl
+      ? ""
+      : doc.ogImageUrl || unfurl?.image || "";
+  const appLinks = protectedLink
+    ? []
+    : uniqueMetaTags([
+        ...(unfurl?.appLinks ?? []),
+        ...(options?.extraAppLinks ?? []),
+      ]);
 
   const lines = [
     "<!doctype html>",

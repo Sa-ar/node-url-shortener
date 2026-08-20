@@ -9,7 +9,6 @@ const SOCIAL_CRAWLER_PATTERNS = [
   /telegrambot/i,
   /pinterest/i,
   /applebot/i,
-  /apple.*webkit.*mobile.*safari/i,
   /skypeuripreview/i,
   /iframely/i,
   /quora link preview/i,
