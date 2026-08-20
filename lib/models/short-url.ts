@@ -1,4 +1,11 @@
-import { model, models, Schema, type Model, type Types } from "mongoose";
+import {
+  model,
+  models,
+  Schema,
+  type HydratedDocument,
+  type Model,
+  type Types,
+} from "mongoose";
 import { nanoid } from "nanoid";
 
 export type DailyClick = {
@@ -10,6 +17,29 @@ export type ShortUrlKind = "path" | "subdomain";
 export type ShortUrlTarget = "url" | "file";
 export type FileDisposition = "inline" | "attachment";
 export type FileSource = "blob" | "external";
+
+export type ShortUrlMetaTag = {
+  key: string;
+  value: string;
+};
+
+export type ShortUrlUnfurl = {
+  title?: string | null;
+  description?: string | null;
+  image?: string | null;
+  imageAlt?: string | null;
+  imageWidth?: string | null;
+  imageHeight?: string | null;
+  siteName?: string | null;
+  type?: string | null;
+  twitterCard?: string | null;
+  video?: string | null;
+  videoSecureUrl?: string | null;
+  videoType?: string | null;
+  appLinks: ShortUrlMetaTag[];
+  finalUrl?: string | null;
+  fetchedAt?: Date | null;
+};
 
 export type ShortUrlAttrs = {
   userId: Types.ObjectId;
@@ -31,6 +61,7 @@ export type ShortUrlAttrs = {
   expiresAt?: Date | null;
   lastAccessedAt?: Date | null;
   dailyClicks: DailyClick[];
+  unfurl?: ShortUrlUnfurl | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -39,6 +70,35 @@ const dailyClickSchema = new Schema<DailyClick>(
   {
     date: { type: String, required: true },
     count: { type: Number, required: true, default: 0 },
+  },
+  { _id: false }
+);
+
+const shortUrlMetaTagSchema = new Schema<ShortUrlMetaTag>(
+  {
+    key: { type: String, required: true },
+    value: { type: String, required: true },
+  },
+  { _id: false }
+);
+
+const shortUrlUnfurlSchema = new Schema<ShortUrlUnfurl>(
+  {
+    title: { type: String, default: null },
+    description: { type: String, default: null },
+    image: { type: String, default: null },
+    imageAlt: { type: String, default: null },
+    imageWidth: { type: String, default: null },
+    imageHeight: { type: String, default: null },
+    siteName: { type: String, default: null },
+    type: { type: String, default: null },
+    twitterCard: { type: String, default: null },
+    video: { type: String, default: null },
+    videoSecureUrl: { type: String, default: null },
+    videoType: { type: String, default: null },
+    appLinks: { type: [shortUrlMetaTagSchema], default: [] },
+    finalUrl: { type: String, default: null },
+    fetchedAt: { type: Date, default: null },
   },
   { _id: false }
 );
@@ -91,6 +151,7 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
     expiresAt: { type: Date, default: null },
     lastAccessedAt: { type: Date, default: null },
     dailyClicks: { type: [dailyClickSchema], default: [] },
+    unfurl: { type: shortUrlUnfurlSchema, default: null },
   },
   { timestamps: true }
 );
@@ -104,3 +165,5 @@ shortUrlSchema.index({ userId: 1, createdAt: -1 });
 export const ShortUrl =
   (models.ShortUrl as Model<ShortUrlAttrs> | undefined) ??
   model<ShortUrlAttrs>("ShortUrl", shortUrlSchema);
+
+export type ShortUrlDoc = HydratedDocument<ShortUrlAttrs>;
