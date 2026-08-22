@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { compare, hash } from "bcryptjs";
 import { NextResponse } from "next/server";
+import { SHORT_URL_KIND, type PublicHitKind } from "@/lib/kinds";
 import type { ShortUrlAttrs } from "@/lib/models/short-url";
 
 const COOKIE_PREFIX = "saar_unlock_";
@@ -120,6 +121,8 @@ export function setUnlockCookie(response: NextResponse, id: string) {
   });
 }
 
-export function unlockActionPath(kind: "path" | "subdomain", code: string) {
-  return kind === "subdomain" ? "/" : `/${encodeURIComponent(code)}`;
+export function unlockActionPath(kind: PublicHitKind, code: string) {
+  return kind === SHORT_URL_KIND.SUBDOMAIN
+    ? "/"
+    : `/${encodeURIComponent(code)}`;
 }

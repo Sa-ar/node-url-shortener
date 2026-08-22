@@ -7,13 +7,19 @@ import {
   type Types,
 } from "mongoose";
 import { nanoid } from "nanoid";
+import {
+  SHORT_URL_KIND,
+  SHORT_URL_KIND_VALUES,
+  type ShortUrlKind,
+} from "@/lib/kinds";
+
+export type { ShortUrlKind } from "@/lib/kinds";
 
 export type DailyClick = {
   date: string;
   count: number;
 };
 
-export type ShortUrlKind = "path" | "subdomain";
 export type ShortUrlTarget = "url" | "file";
 export type FileDisposition = "inline" | "attachment";
 export type FileSource = "blob" | "external";
@@ -119,9 +125,9 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
     },
     kind: {
       type: String,
-      enum: ["path", "subdomain"],
+      enum: [...SHORT_URL_KIND_VALUES],
       required: true,
-      default: "path",
+      default: SHORT_URL_KIND.PATH,
     },
     target: {
       type: String,
@@ -156,8 +162,8 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
   { timestamps: true }
 );
 
-// Path slugs and subdomain labels are separate namespaces:
-// saar.to/resume and resume.saar.to may both exist.
+// Path and subdomain are separate namespaces (kind+short unique).
+// SHORT_URL_KIND.BOTH claims both hosts for one document (app-level collision checks).
 shortUrlSchema.index({ kind: 1, short: 1 }, { unique: true });
 shortUrlSchema.index({ createdAt: -1 });
 shortUrlSchema.index({ userId: 1, createdAt: -1 });

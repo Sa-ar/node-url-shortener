@@ -21,7 +21,7 @@ export function CreateLinkPage({ isOwner = false }: { isOwner?: boolean }) {
           </h1>
           <p className="max-w-xl text-muted-foreground">
             {isOwner
-              ? "Paste a URL or attach a file. Premium and extras live under Options."
+              ? "Paste a URL or attach a file. Choose path and/or subdomain hosts. Extras live under Options."
               : "Paste a URL or attach a file. Password, note, and preview live under Options."}
           </p>
         </div>
@@ -34,14 +34,13 @@ export function CreateLinkPage({ isOwner = false }: { isOwner?: boolean }) {
         </Button>
       </div>
 
-      <div className="max-w-lg">
-        <UrlForm
-          isOwner={isOwner}
-          onSaved={() => {
-            router.push("/");
-          }}
-        />
-      </div>
+      <UrlForm
+        layout="page"
+        isOwner={isOwner}
+        onSaved={() => {
+          router.push("/");
+        }}
+      />
     </PageShell>
   );
 }

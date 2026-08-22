@@ -12,8 +12,15 @@ import type {
   FileDisposition,
   FileSource,
   ShortUrlDto,
+  ShortUrlKind,
   ShortUrlTarget,
 } from "@/lib/types";
+import {
+  SHORT_URL_KIND,
+  hostsToKind,
+  kindHasPath,
+  kindHasSubdomain,
+} from "@/lib/kinds";
 import {
   createUrlSchema,
   editUrlSchema,
@@ -24,6 +31,7 @@ import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 const apexHost =
   typeof window !== "undefined"
@@ -78,7 +86,7 @@ type FormValues = {
   fullUrl: string;
   slug: string;
   expiresAt: string;
-  kind: "path" | "subdomain";
+  kind: ShortUrlKind;
   target: ShortUrlTarget;
   disposition: FileDisposition;
   fileName: string;
@@ -143,41 +151,47 @@ function Segmented<T extends string>({
   );
 }
 
-function ToggleRow({
+function HostToggle({
   id,
   label,
   description,
   checked,
+  disabled,
   onToggle,
 }: {
   id: string;
   label: string;
   description: string;
   checked: boolean;
+  disabled?: boolean;
   onToggle: () => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-xl border border-border/80 bg-muted/30 px-3 py-3">
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <Label htmlFor={id} className="text-sm">
           {label}
         </Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="break-words text-xs text-muted-foreground">{description}</p>
       </div>
       <button
         id={id}
         type="button"
         role="switch"
         aria-checked={checked}
-        className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
-          checked ? "bg-primary" : "bg-muted-foreground/30"
-        }`}
+        disabled={disabled}
+        className={cn(
+          "relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors",
+          checked ? "bg-primary" : "bg-muted-foreground/30",
+          disabled && "cursor-not-allowed opacity-50"
+        )}
         onClick={onToggle}
       >
         <span
-          className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-background transition-transform ${
+          className={cn(
+            "absolute top-0.5 left-0.5 size-5 rounded-full bg-background transition-transform",
             checked ? "translate-x-5" : "translate-x-0"
-          }`}
+          )}
         />
       </button>
     </div>
@@ -188,10 +202,13 @@ export function UrlForm({
   onSaved,
   isOwner = false,
   url,
+  layout = "compact",
 }: {
   onSaved?: () => void;
   isOwner?: boolean;
   url?: ShortUrlDto;
+  /** page = two-column create layout; compact = edit dialog */
+  layout?: "page" | "compact";
 }) {
   const isEdit = Boolean(url);
   const queryClient = useQueryClient();
@@ -235,7 +252,7 @@ export function UrlForm({
         toast.success("Link updated", { description });
       } else if (saved.target === "file") {
         toast.success("File link created", { description });
-      } else if (saved.kind === "subdomain") {
+      } else if (kindHasSubdomain(saved.kind)) {
         toast.success("Premium link created", { description });
       } else {
         toast.success("Short URL created", { description });
@@ -254,7 +271,7 @@ export function UrlForm({
       fullUrl: url?.full ?? "",
       slug: url?.short ?? "",
       expiresAt: url ? toDatetimeLocalValue(url.expiresAt) : "",
-      kind: url?.kind ?? ("path" as const),
+      kind: url?.kind ?? SHORT_URL_KIND.PATH,
       target: url?.target ?? ("url" as ShortUrlTarget),
       disposition: url?.disposition ?? ("inline" as FileDisposition),
       fileName: url?.fileName ?? "",
@@ -306,19 +323,27 @@ export function UrlForm({
         url?.hasPassword
     );
   });
-  const isPremium = kind === "subdomain";
+  const pathHost = kindHasPath(kind);
+  const subdomainHost = kindHasSubdomain(kind);
   const isFile = target === "file";
   const trimmedSlug = slug.trim();
   const previewSlug = trimmedSlug.toLowerCase() || "your-subdomain";
   const pathPreviewSlug = trimmedSlug || "your-slug";
   const reservedHint =
     trimmedSlug !== "" && isReservedSlug(trimmedSlug)
-      ? `This ${isPremium ? "subdomain" : "slug"} is reserved`
+      ? `This ${subdomainHost ? "vanity label" : "slug"} is reserved`
       : undefined;
-  const showPremiumToggle = isOwner && !isEdit;
-  const shortPreview = isPremium
-    ? `${previewSlug}.${apexHost}`
-    : `${apexHost}/${pathPreviewSlug}`;
+  const showHostControls = isOwner;
+  const slugRequired = subdomainHost || isEdit;
+  const useWideLayout = layout === "page" && !isEdit;
+
+  const setHosts = (nextPath: boolean, nextSubdomain: boolean) => {
+    if (!nextPath && !nextSubdomain) {
+      toast.error("Pick at least one host");
+      return;
+    }
+    form.setFieldValue("kind", hostsToKind(nextPath, nextSubdomain));
+  };
 
   const applyExternalFileUrl = (value: string) => {
     form.setFieldValue("fullUrl", value);
@@ -367,13 +392,360 @@ export function UrlForm({
         ? "Save changes"
         : isFile
           ? "Create file link"
-          : isPremium
+          : subdomainHost
             ? "Create premium link"
             : "Shorten URL";
 
+  const destinationFields = (
+    <>
+      <form.Field name="target">
+        {(field) => (
+          <Segmented
+            ariaLabel="Destination type"
+            value={field.state.value}
+            onChange={(value) => {
+              field.handleChange(value);
+              if (value === "url") {
+                form.setFieldValue("fileSource", "");
+                form.setFieldValue("fileName", "");
+                setPasteFileUrl(false);
+              }
+            }}
+            options={[
+              { value: "url", label: "URL" },
+              { value: "file", label: "File" },
+            ]}
+          />
+        )}
+      </form.Field>
+
+      {isFile ? (
+        <>
+          <div className="grid min-w-0 gap-2 rounded-xl border border-dashed border-border px-3 py-4">
+            <Label htmlFor="file-upload" className="text-sm">
+              Upload file
+            </Label>
+            <Input
+              id="file-upload"
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+              disabled={uploading || mutation.isPending}
+              className="h-auto min-w-0 cursor-pointer py-2 file:mr-3"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void uploadFile(file);
+                }
+              }}
+            />
+            <p className="break-words text-xs text-muted-foreground">
+              {fileName
+                ? `Selected · ${fileName}`
+                : "PDF, images, zip, or Office · 15 MB max."}
+            </p>
+            {pasteFileUrl ? null : (
+              <button
+                type="button"
+                className="justify-self-start text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                onClick={() => setPasteFileUrl(true)}
+              >
+                Paste a file URL instead
+              </button>
+            )}
+          </div>
+
+          {pasteFileUrl ? (
+            <form.Field name="fullUrl">
+              {(field) => (
+                <FormField
+                  label="File URL"
+                  htmlFor={field.name}
+                  requirement="Required"
+                  hint="https://example.com/resume.pdf"
+                  error={
+                    field.state.meta.errors[0]
+                      ? formatFormError(field.state.meta.errors[0])
+                      : undefined
+                  }
+                >
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="url"
+                    placeholder="https://example.com/resume.pdf"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => {
+                      applyExternalFileUrl(event.target.value);
+                    }}
+                    aria-invalid={field.state.meta.errors.length > 0}
+                  />
+                </FormField>
+              )}
+            </form.Field>
+          ) : null}
+
+          <form.Field name="disposition">
+            {(field) => (
+              <Segmented
+                ariaLabel="File disposition"
+                value={field.state.value}
+                onChange={field.handleChange}
+                options={[
+                  { value: "inline", label: "Open in browser" },
+                  { value: "attachment", label: "Force download" },
+                ]}
+              />
+            )}
+          </form.Field>
+          <p className="text-xs text-muted-foreground">
+            Choose whether visitors open the file or download it
+          </p>
+        </>
+      ) : (
+        <form.Field name="fullUrl">
+          {(field) => (
+            <FormField
+              label="Destination URL"
+              htmlFor={field.name}
+              requirement="Required"
+              hint="https://example.com/very/long/path"
+              error={
+                field.state.meta.errors[0]
+                  ? formatFormError(field.state.meta.errors[0])
+                  : undefined
+              }
+            >
+              <Input
+                id={field.name}
+                name={field.name}
+                type="url"
+                placeholder="https://example.com/very/long/path"
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                onChange={(event) => field.handleChange(event.target.value)}
+                aria-invalid={field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+      )}
+    </>
+  );
+
+  const hostAndSlugFields = (
+    <>
+      {showHostControls ? (
+        <div className="grid gap-2">
+          <p className="text-sm font-medium">Hosts</p>
+          <HostToggle
+            id="host-path"
+            label={`Path · ${apexHost}/${pathPreviewSlug}`}
+            description="Serve on the apex path"
+            checked={pathHost}
+            onToggle={() => setHosts(!pathHost, subdomainHost)}
+          />
+          <HostToggle
+            id="host-subdomain"
+            label={`Subdomain · ${previewSlug}.${apexHost}`}
+            description="Owner only · vanity DNS label"
+            checked={subdomainHost}
+            onToggle={() => setHosts(pathHost, !subdomainHost)}
+          />
+        </div>
+      ) : null}
+
+      <form.Field name="slug">
+        {(field) => (
+          <FormField
+            label={subdomainHost && !pathHost ? "Subdomain" : "Custom slug"}
+            htmlFor={field.name}
+            requirement={slugRequired ? "Required" : "Optional"}
+            hint={
+              subdomainHost && pathHost
+                ? `${apexHost}/${pathPreviewSlug} and ${previewSlug}.${apexHost}`
+                : subdomainHost
+                  ? `https://${previewSlug}.${apexHost}`
+                  : isEdit
+                    ? `${apexHost}/${pathPreviewSlug}`
+                    : `Optional · ${apexHost}/${pathPreviewSlug}`
+            }
+            error={
+              field.state.meta.errors[0]
+                ? formatFormError(field.state.meta.errors[0])
+                : reservedHint
+            }
+          >
+            <Input
+              id={field.name}
+              name={field.name}
+              placeholder={subdomainHost ? "resume" : "my-link"}
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+              aria-invalid={
+                field.state.meta.errors.length > 0 || Boolean(reservedHint)
+              }
+            />
+          </FormField>
+        )}
+      </form.Field>
+    </>
+  );
+
+  const optionsFields = (
+    <>
+      <div className="space-y-1 font-mono text-xs text-muted-foreground">
+        {pathHost ? <p className="break-all">{`${apexHost}/${pathPreviewSlug}`}</p> : null}
+        {subdomainHost ? (
+          <p className="break-all">{`${previewSlug}.${apexHost}`}</p>
+        ) : null}
+      </div>
+
+      <form.Field name="note">
+        {(field) => (
+          <FormField
+            label="Internal note"
+            htmlFor={field.name}
+            requirement="Optional"
+            hint="Only visible in the dashboard"
+            error={
+              field.state.meta.errors[0]
+                ? formatFormError(field.state.meta.errors[0])
+                : undefined
+            }
+          >
+            <Input
+              id={field.name}
+              name={field.name}
+              placeholder="Why this link exists"
+              maxLength={500}
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      <form.Field name="expiresAt">
+        {(field) => (
+          <FormField
+            label="Expires"
+            htmlFor={field.name}
+            requirement="Optional"
+            error={
+              field.state.meta.errors[0]
+                ? formatFormError(field.state.meta.errors[0])
+                : undefined
+            }
+          >
+            <Input
+              id={field.name}
+              name={field.name}
+              type="datetime-local"
+              className="min-w-0"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+              aria-invalid={field.state.meta.errors.length > 0}
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      <form.Field name="password">
+        {(field) => (
+          <FormField
+            label="Password"
+            htmlFor={field.name}
+            requirement="Optional"
+            hint={
+              url?.hasPassword
+                ? "Leave blank to keep the current password"
+                : "Visitors must enter this to open the link"
+            }
+          >
+            <Input
+              id={field.name}
+              name={field.name}
+              type="password"
+              autoComplete="new-password"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      {url?.hasPassword ? (
+        <form.Field name="removePassword">
+          {(field) => (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={field.state.value}
+                onChange={(event) => field.handleChange(event.target.checked)}
+              />
+              Remove password
+            </label>
+          )}
+        </form.Field>
+      ) : null}
+
+      <div className="grid min-w-0 gap-3 rounded-xl border border-border/80 px-3 py-3">
+        <div className="space-y-1">
+          <p className="text-sm">Link preview</p>
+          <p className="text-xs text-muted-foreground">
+            Optional title, description, and image for Slack / iMessage
+          </p>
+        </div>
+        <form.Field name="ogTitle">
+          {(field) => (
+            <Input
+              id={field.name}
+              name={field.name}
+              placeholder="OG title"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+            />
+          )}
+        </form.Field>
+        <form.Field name="ogDescription">
+          {(field) => (
+            <Input
+              id={field.name}
+              name={field.name}
+              placeholder="OG description"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+            />
+          )}
+        </form.Field>
+        <form.Field name="ogImageUrl">
+          {(field) => (
+            <Input
+              id={field.name}
+              name={field.name}
+              type="url"
+              placeholder="https://example.com/card.png"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+            />
+          )}
+        </form.Field>
+      </div>
+    </>
+  );
+
   return (
     <form
-      className="grid gap-4"
+      className="grid min-w-0 gap-4"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -391,348 +763,38 @@ export function UrlForm({
       />
 
       {pane === "link" ? (
-        <>
-          {showPremiumToggle ? (
-            <form.Field name="kind">
-              {(field) => (
-                <ToggleRow
-                  id="premium-toggle"
-                  label="Premium subdomain"
-                  description={`Owner only · ${previewSlug}.${apexHost}`}
-                  checked={field.state.value === "subdomain"}
-                  onToggle={() => {
-                    field.handleChange(
-                      field.state.value === "subdomain" ? "path" : "subdomain"
-                    );
-                  }}
-                />
-              )}
-            </form.Field>
-          ) : null}
-
-          <form.Field name="target">
-            {(field) => (
-              <Segmented
-                ariaLabel="Destination type"
-                value={field.state.value}
-                onChange={(value) => {
-                  field.handleChange(value);
-                  if (value === "url") {
-                    form.setFieldValue("fileSource", "");
-                    form.setFieldValue("fileName", "");
-                    setPasteFileUrl(false);
-                  }
-                }}
-                options={[
-                  { value: "url", label: "URL" },
-                  { value: "file", label: "File" },
-                ]}
-              />
-            )}
-          </form.Field>
-
-          {isFile ? (
-            <>
-              <div className="grid gap-2 rounded-xl border border-dashed border-border px-3 py-4">
-                <Label htmlFor="file-upload" className="text-sm">
-                  Upload file
-                </Label>
-                <Input
-                  id="file-upload"
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                  disabled={uploading || mutation.isPending}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      void uploadFile(file);
-                    }
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {fileName
-                    ? `Selected · ${fileName}`
-                    : "PDF, images, zip, or Office · 15 MB max."}
-                </p>
-                {pasteFileUrl ? null : (
-                  <button
-                    type="button"
-                    className="justify-self-start text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                    onClick={() => setPasteFileUrl(true)}
-                  >
-                    Paste a file URL instead
-                  </button>
-                )}
-              </div>
-
-              {pasteFileUrl ? (
-                <form.Field name="fullUrl">
-                  {(field) => (
-                    <FormField
-                      label="File URL"
-                      htmlFor={field.name}
-                      requirement="Required"
-                      hint="https://example.com/resume.pdf"
-                      error={
-                        field.state.meta.errors[0]
-                          ? formatFormError(field.state.meta.errors[0])
-                          : undefined
-                      }
-                    >
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type="url"
-                        required
-                        placeholder="https://example.com/resume.pdf"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => {
-                          applyExternalFileUrl(event.target.value);
-                        }}
-                        aria-invalid={field.state.meta.errors.length > 0}
-                      />
-                    </FormField>
-                  )}
-                </form.Field>
-              ) : null}
-
-              <form.Field name="disposition">
-                {(field) => (
-                  <ToggleRow
-                    id="download-toggle"
-                    label="Download instead of opening"
-                    description={
-                      field.state.value === "attachment"
-                        ? "Visitors get a file download"
-                        : "Open in the browser when possible"
-                    }
-                    checked={field.state.value === "attachment"}
-                    onToggle={() => {
-                      field.handleChange(
-                        field.state.value === "attachment"
-                          ? "inline"
-                          : "attachment"
-                      );
-                    }}
-                  />
-                )}
-              </form.Field>
-            </>
-          ) : (
-            <form.Field name="fullUrl">
-              {(field) => (
-                <FormField
-                  label="Destination URL"
-                  htmlFor={field.name}
-                  requirement="Required"
-                  hint="https://example.com/very/long/path"
-                  error={
-                    field.state.meta.errors[0]
-                      ? formatFormError(field.state.meta.errors[0])
-                      : undefined
-                  }
-                >
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    type="url"
-                    required
-                    placeholder="https://example.com/very/long/path"
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    aria-invalid={field.state.meta.errors.length > 0}
-                  />
-                </FormField>
-              )}
-            </form.Field>
-          )}
-
-          <form.Field name="slug">
-            {(field) => (
-              <FormField
-                label={isPremium ? "Subdomain" : "Custom slug"}
-                htmlFor={field.name}
-                requirement={isPremium ? "Required" : "Optional"}
-                hint={
-                  isPremium
-                    ? `Required · https://${previewSlug}.${apexHost}`
-                    : isEdit
-                      ? `${apexHost}/${pathPreviewSlug}`
-                      : `Optional · ${apexHost}/${pathPreviewSlug}`
-                }
-                error={
-                  field.state.meta.errors[0]
-                    ? formatFormError(field.state.meta.errors[0])
-                    : reservedHint
-                }
-              >
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  placeholder={isPremium ? "resume" : "my-link"}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  aria-invalid={
-                    field.state.meta.errors.length > 0 || Boolean(reservedHint)
-                  }
-                  required={isPremium || isEdit}
-                />
-              </FormField>
-            )}
-          </form.Field>
-        </>
-      ) : (
-        <>
-          <p className="font-mono text-xs text-muted-foreground">{shortPreview}</p>
-
-          <form.Field name="note">
-            {(field) => (
-              <FormField
-                label="Internal note"
-                htmlFor={field.name}
-                requirement="Optional"
-                hint="Only visible in the dashboard"
-                error={
-                  field.state.meta.errors[0]
-                    ? formatFormError(field.state.meta.errors[0])
-                    : undefined
-                }
-              >
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  placeholder="Why this link exists"
-                  maxLength={500}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Field name="expiresAt">
-            {(field) => (
-              <FormField
-                label="Expires"
-                htmlFor={field.name}
-                requirement="Optional"
-                error={
-                  field.state.meta.errors[0]
-                    ? formatFormError(field.state.meta.errors[0])
-                    : undefined
-                }
-              >
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="datetime-local"
-                  className="min-w-0"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  aria-invalid={field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Field name="password">
-            {(field) => (
-              <FormField
-                label="Password"
-                htmlFor={field.name}
-                requirement="Optional"
-                hint={
-                  url?.hasPassword
-                    ? "Leave blank to keep the current password"
-                    : "Visitors must enter this to open the link"
-                }
-              >
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="password"
-                  autoComplete="new-password"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-              </FormField>
-            )}
-          </form.Field>
-
-          {url?.hasPassword ? (
-            <form.Field name="removePassword">
-              {(field) => (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={field.state.value}
-                    onChange={(event) =>
-                      field.handleChange(event.target.checked)
-                    }
-                  />
-                  Remove password
-                </label>
-              )}
-            </form.Field>
-          ) : null}
-
-          <div className="grid gap-3 rounded-xl border border-border/80 px-3 py-3">
-            <div className="space-y-1">
-              <p className="text-sm">Link preview</p>
-              <p className="text-xs text-muted-foreground">
-                Optional title, description, and image for Slack / iMessage
-              </p>
+        useWideLayout ? (
+          <div className="grid min-w-0 gap-6 md:grid-cols-2">
+            <div className="grid min-w-0 content-start gap-4">
+              {destinationFields}
             </div>
-            <form.Field name="ogTitle">
-              {(field) => (
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  placeholder="OG title"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-              )}
-            </form.Field>
-            <form.Field name="ogDescription">
-              {(field) => (
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  placeholder="OG description"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-              )}
-            </form.Field>
-            <form.Field name="ogImageUrl">
-              {(field) => (
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="url"
-                  placeholder="https://example.com/card.png"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-              )}
-            </form.Field>
+            <div className="grid min-w-0 content-start gap-4">
+              {hostAndSlugFields}
+            </div>
           </div>
-        </>
+        ) : (
+          <div className="grid min-w-0 gap-4">
+            {destinationFields}
+            {hostAndSlugFields}
+          </div>
+        )
+      ) : (
+        <div
+          className={cn(
+            "grid min-w-0 gap-4",
+            useWideLayout && "md:max-w-xl"
+          )}
+        >
+          {optionsFields}
+        </div>
       )}
 
       <Button
         type="submit"
-        className="h-10 w-full rounded-full shadow-[0_0_24px_rgb(249_208_38/0.25)]"
+        className={cn(
+          "h-10 rounded-full shadow-[0_0_24px_rgb(249_208_38/0.25)]",
+          useWideLayout ? "md:w-auto md:justify-self-start md:px-8" : "w-full"
+        )}
         disabled={mutation.isPending || uploading}
       >
         {submitLabel}

@@ -1,6 +1,12 @@
 import { isExpired } from "@/lib/dates";
 import { recordClickEvent } from "@/lib/clicks";
 import { connectDB } from "@/lib/db";
+import {
+  PATH_HIT_KINDS,
+  SHORT_URL_KIND,
+  SUBDOMAIN_HIT_KINDS,
+  type PublicHitKind,
+} from "@/lib/kinds";
 import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
 import { recordClick } from "@/lib/urls";
 import { isReservedSlug } from "@/lib/validations/url";
@@ -10,9 +16,10 @@ export type PublicLinkDoc = HydratedDocument<ShortUrlAttrs>;
 
 export async function resolvePublicHit(
   code: string,
-  kind: "path" | "subdomain"
+  kind: PublicHitKind
 ): Promise<PublicLinkDoc | null> {
-  const slug = kind === "subdomain" ? code.toLowerCase() : code;
+  const slug =
+    kind === SHORT_URL_KIND.SUBDOMAIN ? code.toLowerCase() : code;
 
   if (isReservedSlug(slug)) {
     return null;
@@ -20,9 +27,15 @@ export async function resolvePublicHit(
 
   await connectDB();
   const doc =
-    kind === "subdomain"
-      ? await ShortUrl.findOne({ short: slug, kind: "subdomain" })
-      : await ShortUrl.findOne({ short: slug, kind: { $ne: "subdomain" } });
+    kind === SHORT_URL_KIND.SUBDOMAIN
+      ? await ShortUrl.findOne({
+          short: slug,
+          kind: { $in: [...SUBDOMAIN_HIT_KINDS] },
+        })
+      : await ShortUrl.findOne({
+          short: slug,
+          kind: { $in: [...PATH_HIT_KINDS] },
+        });
 
   if (!doc || isExpired(doc.expiresAt)) {
     return null;
