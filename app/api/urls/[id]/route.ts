@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { loadUrl, revalidateUrlCaches } from "@/lib/url-data";
@@ -21,6 +21,7 @@ import { assignFileTarget, deleteStoredBlob } from "@/lib/files";
 import { hashLinkPassword } from "@/lib/link-gate";
 import { isOwnerRole } from "@/lib/roles";
 import { ensureVanityDomain, removeVanityDomain } from "@/lib/vercel-domains";
+import { refreshShortUrlUnfurlById } from "@/lib/unfurl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -238,6 +239,11 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const dto = serializeShortUrl(doc, getBaseUrl(request));
+  after(async () => {
+    if (doc.target === "url") {
+      await refreshShortUrlUnfurlById(doc._id.toString());
+    }
+  });
 
   if (
     previousSource === "blob" &&

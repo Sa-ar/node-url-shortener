@@ -18,4 +18,5 @@ async function handle(
 }
 
 export const GET = handle;
+export const HEAD = handle;
 export const POST = handle;

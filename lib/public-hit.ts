@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getClientPlatform, getUserAgent } from "@/lib/crawlers";
+import { getDeepLinkMatch } from "@/lib/deep-links";
 import { serveFile } from "@/lib/files";
 import { recordPublicHit, resolvePublicHit } from "@/lib/hits";
 import {
@@ -12,11 +14,65 @@ import { hasCustomOg, isPreviewCrawler, ogPage } from "@/lib/og";
 import { getApexOrigin, vanityShortUrl } from "@/lib/hosts";
 import { SHORT_URL_KIND, type PublicHitKind } from "@/lib/kinds";
 import { shortUrlTarget } from "@/lib/urls";
+import { isUnfurlStale, refreshShortUrlUnfurl } from "@/lib/unfurl";
 
 function canonicalUrl(kind: PublicHitKind, code: string) {
   return kind === SHORT_URL_KIND.SUBDOMAIN
     ? vanityShortUrl(code)
     : `${getApexOrigin()}/${encodeURIComponent(code)}`;
+}
+
+function redirectTo(location: string, status = 302) {
+  return new Response(null, {
+    status,
+    headers: { location },
+  });
+}
+
+async function getPreviewUnfurl(doc: Awaited<ReturnType<typeof resolvePublicHit>>) {
+  if (!doc) {
+    return null;
+  }
+
+  if (!isUnfurlStale(doc.unfurl)) {
+    return doc.unfurl;
+  }
+
+  try {
+    return await refreshShortUrlUnfurl(doc, { timeoutMs: 2_500 });
+  } catch {
+    return null;
+  }
+}
+
+/** Embed a string in an HTML <script> without letting </script> close the tag early. */
+function jsonForInlineScript(value: string) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function buildIosTrampolineScript(appUrl: string, fallbackUrl: string) {
+  const app = jsonForInlineScript(appUrl);
+  const fallback = jsonForInlineScript(fallbackUrl);
+
+  return `
+let leftPage = false;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    leftPage = true;
+  }
+});
+window.location.replace(${app});
+setTimeout(() => {
+  if (!leftPage) {
+    window.location.replace(${fallback});
+  }
+}, 800);
+`.trim();
 }
 
 export async function handlePublicRequest(
@@ -32,10 +88,11 @@ export async function handlePublicRequest(
   const label =
     kind === SHORT_URL_KIND.SUBDOMAIN ? `${doc.short}.saar.to` : `saar.to/${doc.short}`;
   const action = unlockActionPath(kind, doc.short);
+  const canonical = canonicalUrl(kind, doc.short);
 
   if (request.method === "POST") {
     if (!doc.passwordHash) {
-      return NextResponse.redirect(canonicalUrl(kind, doc.short), 303);
+      return NextResponse.redirect(canonical, 303);
     }
 
     const form = await request.formData().catch(() => null);
@@ -48,28 +105,68 @@ export async function handlePublicRequest(
       return unlockPage(label, action, true);
     }
 
-    const redirectTo = canonicalUrl(kind, doc.short);
-    const response = NextResponse.redirect(redirectTo, 303);
+    const redirectTarget = canonical;
+    const response = NextResponse.redirect(redirectTarget, 303);
     setUnlockCookie(response, doc._id.toString());
     return response;
   }
 
+  if (request.method === "HEAD") {
+    return new Response(null, { status: 200 });
+  }
+
   const locked = needsPassword(doc, request);
   const preview = isPreviewCrawler(request);
+  const target = shortUrlTarget(doc);
+  const deepLinkMatch = target === "url" ? getDeepLinkMatch(doc.full) : null;
 
-  if (preview && (hasCustomOg(doc) || locked)) {
-    return ogPage(doc, canonicalUrl(kind, doc.short));
+  // Locked links: crawlers get safe placeholder OG only — never destination
+  // App Links, forwarded unfurl, or deep-link metadata.
+  if (preview && locked) {
+    return ogPage(doc, canonical);
+  }
+
+  if (preview && hasCustomOg(doc)) {
+    return ogPage(doc, canonical, { extraAppLinks: deepLinkMatch?.appLinks });
+  }
+
+  if (preview && target === "url") {
+    const unfurl = await getPreviewUnfurl(doc);
+    if (unfurl) {
+      return ogPage(doc, canonical, {
+        forwardedUnfurl: unfurl,
+        extraAppLinks: deepLinkMatch?.appLinks,
+      });
+    }
+
+    return redirectTo(doc.full);
   }
 
   if (locked) {
     return unlockPage(label, action);
   }
 
+  if (target === "url") {
+    const platform = getClientPlatform(getUserAgent(request));
+    if (deepLinkMatch?.androidIntentUrl && platform === "android") {
+      await recordPublicHit(request, doc);
+      return redirectTo(deepLinkMatch.androidIntentUrl);
+    }
+
+    if (deepLinkMatch?.iosUrl && platform === "ios") {
+      await recordPublicHit(request, doc);
+      return ogPage(doc, canonical, {
+        extraAppLinks: deepLinkMatch.appLinks,
+        script: buildIosTrampolineScript(deepLinkMatch.iosUrl, doc.full),
+      });
+    }
+  }
+
   await recordPublicHit(request, doc);
 
-  if (shortUrlTarget(doc) === "file") {
+  if (target === "file") {
     return serveFile(doc);
   }
 
-  return NextResponse.redirect(doc.full, 307);
+  return NextResponse.redirect(doc.full, 302);
 }
