@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SHORT_URL_KIND, kindHasSubdomain } from "@/lib/kinds";
 
 export function UrlStats({ code }: { code: string }) {
   const [hideBots, setHideBots] = useState(false);
@@ -115,11 +116,11 @@ export function UrlStats({ code }: { code: string }) {
             saar.to
           </p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
-            {url.kind === "path"
+            {url.kind === SHORT_URL_KIND.PATH
               ? url.short
               : url.shortUrl.replace(/^https?:\/\//, "")}
           </h1>
-          {url.kind === "both" && url.pathUrl ? (
+          {url.kind === SHORT_URL_KIND.BOTH && url.pathUrl ? (
             <a
               href={url.pathUrl}
               className="block max-w-2xl truncate font-mono text-sm text-muted-foreground underline-offset-4 hover:underline"
@@ -143,9 +144,9 @@ export function UrlStats({ code }: { code: string }) {
             ) : (
               <Badge variant="outline">Active</Badge>
             )}
-            {url.kind === "subdomain" || url.kind === "both" ? (
+            {kindHasSubdomain(url.kind) ? (
               <Badge variant="outline" className="border-primary/40 text-primary">
-                {url.kind === "both" ? "Path + Premium" : "Premium"}
+                {url.kind === SHORT_URL_KIND.BOTH ? "Path + Premium" : "Premium"}
               </Badge>
             ) : null}
             {url.hasPassword ? <Badge variant="outline">Password</Badge> : null}

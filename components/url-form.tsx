@@ -16,12 +16,16 @@ import type {
   ShortUrlTarget,
 } from "@/lib/types";
 import {
+  SHORT_URL_KIND,
+  hostsToKind,
+  kindHasPath,
+  kindHasSubdomain,
+} from "@/lib/kinds";
+import {
   createUrlSchema,
   editUrlSchema,
   formatFormError,
   isReservedSlug,
-  kindHasPath,
-  kindHasSubdomain,
 } from "@/lib/validations/url";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
@@ -76,12 +80,6 @@ function fileNameFromUrl(value: string) {
   } catch {
     return "download";
   }
-}
-
-function hostsToKind(pathHost: boolean, subdomainHost: boolean): ShortUrlKind {
-  if (pathHost && subdomainHost) return "both";
-  if (subdomainHost) return "subdomain";
-  return "path";
 }
 
 type FormValues = {
@@ -273,7 +271,7 @@ export function UrlForm({
       fullUrl: url?.full ?? "",
       slug: url?.short ?? "",
       expiresAt: url ? toDatetimeLocalValue(url.expiresAt) : "",
-      kind: url?.kind ?? ("path" as const),
+      kind: url?.kind ?? SHORT_URL_KIND.PATH,
       target: url?.target ?? ("url" as ShortUrlTarget),
       disposition: url?.disposition ?? ("inline" as FileDisposition),
       fileName: url?.fileName ?? "",
@@ -333,7 +331,7 @@ export function UrlForm({
   const pathPreviewSlug = trimmedSlug || "your-slug";
   const reservedHint =
     trimmedSlug !== "" && isReservedSlug(trimmedSlug)
-      ? `This ${subdomainHost ? "subdomain" : "slug"} is reserved`
+      ? `This ${subdomainHost ? "vanity label" : "slug"} is reserved`
       : undefined;
   const showHostControls = isOwner;
   const slugRequired = subdomainHost || isEdit;

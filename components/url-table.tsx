@@ -17,6 +17,7 @@ import { deleteUrl, fetchUrl } from "@/lib/api";
 import { isExpiringSoon } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { removeUrlFromCache, urlQueryKey } from "@/lib/query";
+import { SHORT_URL_KIND, kindHasSubdomain } from "@/lib/kinds";
 import type { ShortUrlDto } from "@/lib/types";
 import { EditUrlDialog } from "@/components/edit-url-dialog";
 import { QrDialog } from "@/components/qr-dialog";
@@ -160,11 +161,11 @@ export function UrlTable({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {row.kind === "path"
+                  {row.kind === SHORT_URL_KIND.PATH
                     ? row.short
                     : row.shortUrl.replace(/^https?:\/\//, "")}
                 </a>
-                {row.kind === "both" && row.pathUrl ? (
+                {row.kind === SHORT_URL_KIND.BOTH && row.pathUrl ? (
                   <a
                     href={row.pathUrl}
                     className="font-mono text-xs text-muted-foreground underline-offset-4 hover:underline"
@@ -174,9 +175,9 @@ export function UrlTable({
                     {row.pathUrl.replace(/^https?:\/\//, "")}
                   </a>
                 ) : null}
-                {row.kind === "subdomain" || row.kind === "both" ? (
+                {kindHasSubdomain(row.kind) ? (
                   <Badge variant="outline" className="w-fit border-primary/40 text-primary">
-                    {row.kind === "both" ? "Path + Premium" : "Premium"}
+                    {row.kind === SHORT_URL_KIND.BOTH ? "Path + Premium" : "Premium"}
                   </Badge>
                 ) : null}
                 {row.hasPassword ? (
@@ -435,7 +436,7 @@ export function UrlTable({
             <AlertDialogTitle>Delete this short URL?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDelete
-                ? pendingDelete.kind === "path"
+                ? pendingDelete.kind === SHORT_URL_KIND.PATH
                   ? `${pendingDelete.short} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
                   : `${pendingDelete.shortUrl.replace(/^https?:\/\//, "")} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
                 : null}

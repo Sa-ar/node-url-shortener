@@ -11,22 +11,14 @@ import {
   isMongooseValidationError,
   serializeShortUrl,
 } from "@/lib/urls";
-import {
-  createUrlSchema,
-  kindHasSubdomain,
-} from "@/lib/validations/url";
+import { kindHasSubdomain, parseShortUrlKind } from "@/lib/kinds";
+import { createUrlSchema } from "@/lib/validations/url";
 import { assignFileTarget } from "@/lib/files";
 import { hashLinkPassword } from "@/lib/link-gate";
 import { ensureVanityDomain } from "@/lib/vercel-domains";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function parseKind(raw: unknown): "path" | "subdomain" | "both" {
-  if (raw === "subdomain") return "subdomain";
-  if (raw === "both") return "both";
-  return "path";
-}
 
 export async function GET(request: Request) {
   const session = await requireSession();
@@ -64,7 +56,7 @@ export async function POST(request: Request) {
     fullUrl: record.fullUrl,
     slug: String(record.slug ?? ""),
     expiresAt: String(record.expiresAt ?? ""),
-    kind: parseKind(record.kind),
+    kind: parseShortUrlKind(record.kind),
     target: record.target === "file" ? "file" : "url",
     disposition: record.disposition === "attachment" ? "attachment" : "inline",
     fileName: String(record.fileName ?? ""),

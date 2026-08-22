@@ -10,10 +10,11 @@ import {
 } from "@/lib/link-gate";
 import { hasCustomOg, isPreviewCrawler, ogPage } from "@/lib/og";
 import { getApexOrigin, vanityShortUrl } from "@/lib/hosts";
+import { SHORT_URL_KIND, type PublicHitKind } from "@/lib/kinds";
 import { shortUrlTarget } from "@/lib/urls";
 
-function canonicalUrl(kind: "path" | "subdomain", code: string) {
-  return kind === "subdomain"
+function canonicalUrl(kind: PublicHitKind, code: string) {
+  return kind === SHORT_URL_KIND.SUBDOMAIN
     ? vanityShortUrl(code)
     : `${getApexOrigin()}/${encodeURIComponent(code)}`;
 }
@@ -21,7 +22,7 @@ function canonicalUrl(kind: "path" | "subdomain", code: string) {
 export async function handlePublicRequest(
   request: Request,
   code: string,
-  kind: "path" | "subdomain"
+  kind: PublicHitKind
 ) {
   const doc = await resolvePublicHit(code, kind);
   if (!doc) {
@@ -29,7 +30,7 @@ export async function handlePublicRequest(
   }
 
   const label =
-    kind === "subdomain" ? `${doc.short}.saar.to` : `saar.to/${doc.short}`;
+    kind === SHORT_URL_KIND.SUBDOMAIN ? `${doc.short}.saar.to` : `saar.to/${doc.short}`;
   const action = unlockActionPath(kind, doc.short);
 
   if (request.method === "POST") {

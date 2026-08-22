@@ -1,9 +1,16 @@
 import mongoose from "mongoose";
 import { isExpired } from "@/lib/dates";
 import { vanityShortUrl } from "@/lib/hosts";
-import { ShortUrl, type ShortUrlAttrs, type ShortUrlKind } from "@/lib/models/short-url";
+import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
+import {
+  PATH_HIT_KINDS,
+  conflictingKinds,
+  kindHasPath,
+  kindHasSubdomain,
+  parseShortUrlKind,
+  type ShortUrlKind,
+} from "@/lib/kinds";
 import type { DailyClick, ShortUrlDto } from "@/lib/types";
-import { kindHasPath, kindHasSubdomain } from "@/lib/validations/url";
 
 const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
 
@@ -26,9 +33,7 @@ export function getBaseUrl(request?: Request) {
 export function shortUrlKind(
   doc: Pick<ShortUrlAttrs, "kind"> | { kind?: string | null }
 ): ShortUrlKind {
-  if (doc.kind === "subdomain") return "subdomain";
-  if (doc.kind === "both") return "both";
-  return "path";
+  return parseShortUrlKind(doc.kind);
 }
 
 export function shortUrlTarget(
@@ -37,21 +42,7 @@ export function shortUrlTarget(
   return doc.target === "file" ? "file" : "url";
 }
 
-/** Kinds that conflict with a proposed kind for the same short label. */
-export function conflictingKinds(kind: ShortUrlKind): ShortUrlKind[] {
-  switch (kind) {
-    case "path":
-      return ["path", "both"];
-    case "subdomain":
-      return ["subdomain", "both"];
-    case "both":
-      return ["path", "subdomain", "both"];
-    default: {
-      const _exhaustive: never = kind;
-      return _exhaustive;
-    }
-  }
-}
+export { conflictingKinds } from "@/lib/kinds";
 
 /**
  * Returns true when another document already claims the short label
@@ -138,7 +129,7 @@ export function findShortUrl(id: string) {
   // Bare slug lookups mean path-capable links (path or both).
   return ShortUrl.findOne({
     short: id,
-    kind: { $in: ["path", "both"] },
+    kind: { $in: [...PATH_HIT_KINDS] },
   });
 }
 
@@ -150,7 +141,7 @@ export function findOwnedShortUrl(id: string, userId: string) {
   return ShortUrl.findOne({
     userId,
     short: id,
-    kind: { $in: ["path", "both"] },
+    kind: { $in: [...PATH_HIT_KINDS] },
   });
 }
 

@@ -1,5 +1,15 @@
 import { z } from "zod";
 import { isAllowedFileType, mustForceAttachment } from "@/lib/file-types";
+import {
+  SHORT_URL_KIND,
+  SHORT_URL_KIND_VALUES,
+  kindHasPath,
+  kindHasSubdomain,
+  type ShortUrlKind,
+} from "@/lib/kinds";
+
+export type { ShortUrlKind };
+export { kindHasPath, kindHasSubdomain };
 
 /**
  * First-path segments the app serves itself (see `proxy.ts` and the `app/`
@@ -36,18 +46,6 @@ const slugPattern = /^[a-zA-Z0-9_-]+$/;
 /** DNS labels: letters, digits, hyphens; no underscores. */
 const subdomainLabelPattern = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/i;
 
-export type SlugKind = "path" | "subdomain" | "both";
-
-/** True when the kind includes a vanity subdomain host. */
-export function kindHasSubdomain(kind: SlugKind): boolean {
-  return kind === "subdomain" || kind === "both";
-}
-
-/** True when the kind includes an apex path host. */
-export function kindHasPath(kind: SlugKind): boolean {
-  return kind === "path" || kind === "both";
-}
-
 /**
  * Validate a slug/subdomain label, adding issues on the `slug` path.
  * Reserved paths are rejected first so the user gets the clearest reason.
@@ -56,14 +54,14 @@ export function kindHasPath(kind: SlugKind): boolean {
  */
 function addSlugIssues(
   rawSlug: string,
-  kind: SlugKind,
+  kind: ShortUrlKind,
   ctx: z.RefinementCtx,
   required: boolean
 ) {
   const slug = rawSlug.trim();
   const needsSubdomainRules = kindHasSubdomain(kind);
   const noun = needsSubdomainRules
-    ? kind === "both"
+    ? kind === SHORT_URL_KIND.BOTH
       ? "Slug"
       : "Subdomain"
     : "Slug";
@@ -195,7 +193,7 @@ const baseUrlObject = z.object({
   fullUrl: z.string().trim(),
   slug: z.string(),
   expiresAt: z.string(),
-  kind: z.enum(["path", "subdomain", "both"]),
+  kind: z.enum(SHORT_URL_KIND_VALUES),
   target: z.enum(["url", "file"]).default("url"),
   disposition: z.enum(["inline", "attachment"]).optional(),
   fileName: z.string().optional(),
@@ -270,7 +268,7 @@ function addFileIssues(
   }
 }
 
-function normalizeSlug(slug: string, kind: SlugKind): string | undefined {
+function normalizeSlug(slug: string, kind: ShortUrlKind): string | undefined {
   const trimmed = slug.trim();
   if (trimmed === "") {
     return undefined;

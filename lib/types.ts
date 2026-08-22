@@ -3,7 +3,9 @@ export type DailyClick = {
   count: number;
 };
 
-export type ShortUrlKind = "path" | "subdomain" | "both";
+import type { ShortUrlKind } from "@/lib/kinds";
+
+export type { ShortUrlKind };
 export type ShortUrlTarget = "url" | "file";
 export type FileDisposition = "inline" | "attachment";
 export type FileSource = "blob" | "external";

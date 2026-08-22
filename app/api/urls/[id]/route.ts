@@ -12,9 +12,11 @@ import {
   shortUrlKind,
 } from "@/lib/urls";
 import {
-  editUrlSchema,
+  SHORT_URL_KIND,
   kindHasSubdomain,
-} from "@/lib/validations/url";
+  parseShortUrlKind,
+} from "@/lib/kinds";
+import { editUrlSchema } from "@/lib/validations/url";
 import { assignFileTarget, deleteStoredBlob } from "@/lib/files";
 import { hashLinkPassword } from "@/lib/link-gate";
 import { isOwnerRole } from "@/lib/roles";
@@ -26,16 +28,6 @@ export const dynamic = "force-dynamic";
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-function parseKind(
-  raw: unknown,
-  fallback: "path" | "subdomain" | "both"
-): "path" | "subdomain" | "both" {
-  if (raw === "subdomain") return "subdomain";
-  if (raw === "both") return "both";
-  if (raw === "path") return "path";
-  return fallback;
-}
 
 export async function GET(request: Request, context: RouteContext) {
   const session = await requireSession();
@@ -89,7 +81,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ? (body as Record<string, unknown>)[key]
       : undefined;
 
-  const nextKind = parseKind(read("kind"), previousKind);
+  const nextKind = parseShortUrlKind(read("kind"), previousKind);
 
   if (
     kindHasSubdomain(nextKind) &&
@@ -104,7 +96,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   // Non-owners cannot change kind away from path.
   const kind =
-    isOwnerRole(session.user.role) || nextKind === "path"
+    isOwnerRole(session.user.role) || nextKind === SHORT_URL_KIND.PATH
       ? nextKind
       : previousKind;
 
