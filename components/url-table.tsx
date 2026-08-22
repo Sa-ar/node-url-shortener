@@ -160,11 +160,23 @@ export function UrlTable({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {row.kind === "subdomain" ? row.shortUrl.replace(/^https?:\/\//, "") : row.short}
+                  {row.kind === "path"
+                    ? row.short
+                    : row.shortUrl.replace(/^https?:\/\//, "")}
                 </a>
-                {row.kind === "subdomain" ? (
+                {row.kind === "both" && row.pathUrl ? (
+                  <a
+                    href={row.pathUrl}
+                    className="font-mono text-xs text-muted-foreground underline-offset-4 hover:underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {row.pathUrl.replace(/^https?:\/\//, "")}
+                  </a>
+                ) : null}
+                {row.kind === "subdomain" || row.kind === "both" ? (
                   <Badge variant="outline" className="w-fit border-primary/40 text-primary">
-                    Premium
+                    {row.kind === "both" ? "Path + Premium" : "Premium"}
                   </Badge>
                 ) : null}
                 {row.hasPassword ? (
@@ -423,9 +435,9 @@ export function UrlTable({
             <AlertDialogTitle>Delete this short URL?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDelete
-                ? pendingDelete.kind === "subdomain"
-                  ? `${pendingDelete.shortUrl} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
-                  : `${pendingDelete.short} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
+                ? pendingDelete.kind === "path"
+                  ? `${pendingDelete.short} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
+                  : `${pendingDelete.shortUrl.replace(/^https?:\/\//, "")} will stop serving ${pendingDelete.fileName || pendingDelete.full}.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -3,7 +3,7 @@ export type DailyClick = {
   count: number;
 };
 
-export type ShortUrlKind = "path" | "subdomain";
+export type ShortUrlKind = "path" | "subdomain" | "both";
 export type ShortUrlTarget = "url" | "file";
 export type FileDisposition = "inline" | "attachment";
 export type FileSource = "blob" | "external";
@@ -52,7 +52,10 @@ export type ShortUrlDto = {
   id: string;
   full: string;
   short: string;
+  /** Primary short URL (vanity when subdomain is enabled). */
   shortUrl: string;
+  /** Apex path URL when the link is served on saar.to/slug (path or both). */
+  pathUrl: string | null;
   kind: ShortUrlKind;
   target: ShortUrlTarget;
   disposition: FileDisposition | null;
@@ -100,6 +103,7 @@ export type UpdateUrlBody = {
   fullUrl: string;
   slug: string;
   expiresAt?: string;
+  kind?: ShortUrlKind;
   target?: ShortUrlTarget;
   disposition?: FileDisposition;
   fileName?: string;

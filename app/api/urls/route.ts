@@ -6,17 +6,27 @@ import { isOwnerRole } from "@/lib/roles";
 import { loadUrlList, revalidateUrlCaches } from "@/lib/url-data";
 import {
   getBaseUrl,
+  hasSlugCollision,
   isDuplicateKeyError,
   isMongooseValidationError,
   serializeShortUrl,
 } from "@/lib/urls";
-import { createUrlSchema } from "@/lib/validations/url";
+import {
+  createUrlSchema,
+  kindHasSubdomain,
+} from "@/lib/validations/url";
 import { assignFileTarget } from "@/lib/files";
 import { hashLinkPassword } from "@/lib/link-gate";
 import { ensureVanityDomain } from "@/lib/vercel-domains";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function parseKind(raw: unknown): "path" | "subdomain" | "both" {
+  if (raw === "subdomain") return "subdomain";
+  if (raw === "both") return "both";
+  return "path";
+}
 
 export async function GET(request: Request) {
   const session = await requireSession();
@@ -47,17 +57,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const kindRaw =
-    body && typeof body === "object" && "kind" in body
-      ? String((body as { kind: unknown }).kind ?? "path")
-      : "path";
-  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const record =
+    body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
   const parsed = createUrlSchema.safeParse({
     fullUrl: record.fullUrl,
     slug: String(record.slug ?? ""),
     expiresAt: String(record.expiresAt ?? ""),
-    kind: kindRaw === "subdomain" ? "subdomain" : "path",
+    kind: parseKind(record.kind),
     target: record.target === "file" ? "file" : "url",
     disposition: record.disposition === "attachment" ? "attachment" : "inline",
     fileName: String(record.fileName ?? ""),
@@ -78,14 +85,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (parsed.data.kind === "subdomain" && !isOwnerRole(session.user.role)) {
+  if (kindHasSubdomain(parsed.data.kind) && !isOwnerRole(session.user.role)) {
     return NextResponse.json(
       { error: "Only owners can create premium subdomain links" },
       { status: 403 }
     );
   }
 
-  if (parsed.data.kind === "subdomain" && !parsed.data.slug) {
+  if (kindHasSubdomain(parsed.data.kind) && !parsed.data.slug) {
     return NextResponse.json(
       { error: "Subdomain is required" },
       { status: 400 }
@@ -93,6 +100,20 @@ export async function POST(request: Request) {
   }
 
   await connectDB({ waitForEnsure: true });
+
+  if (
+    parsed.data.slug &&
+    (await hasSlugCollision(parsed.data.slug, parsed.data.kind))
+  ) {
+    return NextResponse.json(
+      {
+        error: kindHasSubdomain(parsed.data.kind)
+          ? "That subdomain or path is already taken"
+          : "That slug is already taken",
+      },
+      { status: 409 }
+    );
+  }
 
   try {
     const doc = await ShortUrl.create({
@@ -118,7 +139,7 @@ export async function POST(request: Request) {
     await doc.save();
 
     let domainWarning: string | undefined;
-    if (parsed.data.kind === "subdomain" && parsed.data.slug) {
+    if (kindHasSubdomain(parsed.data.kind) && parsed.data.slug) {
       const domainResult = await ensureVanityDomain(parsed.data.slug);
       if (!domainResult.ok) {
         domainWarning = domainResult.error;
@@ -138,10 +159,9 @@ export async function POST(request: Request) {
     if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         {
-          error:
-            parsed.data.kind === "subdomain"
-              ? "That subdomain is already taken"
-              : "That slug is already taken",
+          error: kindHasSubdomain(parsed.data.kind)
+            ? "That subdomain is already taken"
+            : "That slug is already taken",
         },
         { status: 409 }
       );

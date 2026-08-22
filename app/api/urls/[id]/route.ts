@@ -5,14 +5,19 @@ import { loadUrl, revalidateUrlCaches } from "@/lib/url-data";
 import {
   findAccessibleShortUrl,
   getBaseUrl,
+  hasSlugCollision,
   isDuplicateKeyError,
   isMongooseValidationError,
   serializeShortUrl,
   shortUrlKind,
 } from "@/lib/urls";
-import { editUrlSchema } from "@/lib/validations/url";
+import {
+  editUrlSchema,
+  kindHasSubdomain,
+} from "@/lib/validations/url";
 import { assignFileTarget, deleteStoredBlob } from "@/lib/files";
 import { hashLinkPassword } from "@/lib/link-gate";
+import { isOwnerRole } from "@/lib/roles";
 import { ensureVanityDomain, removeVanityDomain } from "@/lib/vercel-domains";
 
 export const runtime = "nodejs";
@@ -21,6 +26,16 @@ export const dynamic = "force-dynamic";
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+function parseKind(
+  raw: unknown,
+  fallback: "path" | "subdomain" | "both"
+): "path" | "subdomain" | "both" {
+  if (raw === "subdomain") return "subdomain";
+  if (raw === "both") return "both";
+  if (raw === "path") return "path";
+  return fallback;
+}
 
 export async function GET(request: Request, context: RouteContext) {
   const session = await requireSession();
@@ -68,16 +83,36 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Short URL not found" }, { status: 404 });
   }
 
-  const kind = shortUrlKind(doc);
+  const previousKind = shortUrlKind(doc);
   const read = (key: string) =>
     body && typeof body === "object" && key in body
       ? (body as Record<string, unknown>)[key]
       : undefined;
 
+  const nextKind = parseKind(read("kind"), previousKind);
+
+  if (
+    kindHasSubdomain(nextKind) &&
+    !kindHasSubdomain(previousKind) &&
+    !isOwnerRole(session.user.role)
+  ) {
+    return NextResponse.json(
+      { error: "Only owners can enable premium subdomain links" },
+      { status: 403 }
+    );
+  }
+
+  // Non-owners cannot change kind away from path.
+  const kind =
+    isOwnerRole(session.user.role) || nextKind === "path"
+      ? nextKind
+      : previousKind;
+
   const parsed = editUrlSchema.safeParse({
     fullUrl: read("fullUrl"),
     slug: read("slug") === undefined ? doc.short : String(read("slug") ?? ""),
-    expiresAt: read("expiresAt") === undefined ? "" : String(read("expiresAt") ?? ""),
+    expiresAt:
+      read("expiresAt") === undefined ? "" : String(read("expiresAt") ?? ""),
     kind,
     target:
       read("target") === undefined
@@ -91,27 +126,40 @@ export async function PATCH(request: Request, context: RouteContext) {
       read("disposition") === "attachment" || doc.disposition === "attachment"
         ? "attachment"
         : "inline",
-    fileName: read("fileName") === undefined ? doc.fileName ?? "" : String(read("fileName") ?? ""),
+    fileName:
+      read("fileName") === undefined
+        ? (doc.fileName ?? "")
+        : String(read("fileName") ?? ""),
     contentType:
       read("contentType") === undefined
-        ? doc.contentType ?? ""
+        ? (doc.contentType ?? "")
         : String(read("contentType") ?? ""),
     fileSize:
-      typeof read("fileSize") === "number" ? read("fileSize") : doc.fileSize ?? undefined,
+      typeof read("fileSize") === "number"
+        ? read("fileSize")
+        : (doc.fileSize ?? undefined),
     fileSource:
       read("fileSource") === "blob" || read("fileSource") === "external"
         ? read("fileSource")
-        : doc.fileSource ?? undefined,
-    note: read("note") === undefined ? doc.note ?? "" : String(read("note") ?? ""),
+        : (doc.fileSource ?? undefined),
+    note:
+      read("note") === undefined
+        ? (doc.note ?? "")
+        : String(read("note") ?? ""),
     password: String(read("password") ?? ""),
     removePassword: read("removePassword") === true,
-    ogTitle: read("ogTitle") === undefined ? doc.ogTitle ?? "" : String(read("ogTitle") ?? ""),
+    ogTitle:
+      read("ogTitle") === undefined
+        ? (doc.ogTitle ?? "")
+        : String(read("ogTitle") ?? ""),
     ogDescription:
       read("ogDescription") === undefined
-        ? doc.ogDescription ?? ""
+        ? (doc.ogDescription ?? "")
         : String(read("ogDescription") ?? ""),
     ogImageUrl:
-      read("ogImageUrl") === undefined ? doc.ogImageUrl ?? "" : String(read("ogImageUrl") ?? ""),
+      read("ogImageUrl") === undefined
+        ? (doc.ogImageUrl ?? "")
+        : String(read("ogImageUrl") ?? ""),
   });
 
   if (!parsed.success) {
@@ -124,13 +172,35 @@ export async function PATCH(request: Request, context: RouteContext) {
   const previousSource = doc.fileSource;
   const nextShort = parsed.data.slug;
   const shortChanged = nextShort !== previousShort;
+  const kindChanged = parsed.data.kind !== previousKind;
 
-  doc.expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+  if (
+    (shortChanged || kindChanged) &&
+    (await hasSlugCollision(nextShort, parsed.data.kind, doc._id.toString()))
+  ) {
+    return NextResponse.json(
+      {
+        error: kindHasSubdomain(parsed.data.kind)
+          ? "That subdomain or path is already taken"
+          : "That slug is already taken",
+      },
+      { status: 409 }
+    );
+  }
+
+  doc.expiresAt = parsed.data.expiresAt
+    ? new Date(parsed.data.expiresAt)
+    : null;
   if (shortChanged) {
     doc.short = nextShort;
   }
+  if (kindChanged) {
+    doc.kind = parsed.data.kind;
+  }
   assignFileTarget(doc, parsed.data);
-  doc.note = parsed.data.note?.trim() ? parsed.data.note.trim().slice(0, 500) : null;
+  doc.note = parsed.data.note?.trim()
+    ? parsed.data.note.trim().slice(0, 500)
+    : null;
   doc.ogTitle = parsed.data.ogTitle ?? null;
   doc.ogDescription = parsed.data.ogDescription ?? null;
   doc.ogImageUrl = parsed.data.ogImageUrl ?? null;
@@ -158,7 +228,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   let domainWarning: string | undefined;
-  if (kind === "subdomain" && shortChanged) {
+  const hadSubdomain = kindHasSubdomain(previousKind);
+  const hasSubdomain = kindHasSubdomain(parsed.data.kind);
+
+  if (hasSubdomain && (shortChanged || !hadSubdomain)) {
     const domainResult = await ensureVanityDomain(nextShort);
     if (!domainResult.ok) {
       domainWarning = domainResult.error;
@@ -166,6 +239,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       domainWarning =
         "Domain not provisioned automatically. Add it in Vercel → Domains, or set VERCEL_TOKEN.";
     }
+  }
+
+  if (hadSubdomain && (!hasSubdomain || (shortChanged && hasSubdomain))) {
     await removeVanityDomain(previousShort);
   }
 
@@ -210,7 +286,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     await deleteStoredBlob(blobUrl);
   }
 
-  if (kind === "subdomain") {
+  if (kindHasSubdomain(kind)) {
     await removeVanityDomain(label);
   }
 

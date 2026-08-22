@@ -36,13 +36,23 @@ const slugPattern = /^[a-zA-Z0-9_-]+$/;
 /** DNS labels: letters, digits, hyphens; no underscores. */
 const subdomainLabelPattern = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/i;
 
-type SlugKind = "path" | "subdomain";
+export type SlugKind = "path" | "subdomain" | "both";
+
+/** True when the kind includes a vanity subdomain host. */
+export function kindHasSubdomain(kind: SlugKind): boolean {
+  return kind === "subdomain" || kind === "both";
+}
+
+/** True when the kind includes an apex path host. */
+export function kindHasPath(kind: SlugKind): boolean {
+  return kind === "path" || kind === "both";
+}
 
 /**
  * Validate a slug/subdomain label, adding issues on the `slug` path.
  * Reserved paths are rejected first so the user gets the clearest reason.
  * When `required` is false an empty path slug is allowed (auto-generated);
- * subdomains are always required.
+ * subdomain / both always require a slug. Subdomain/both use DNS label rules.
  */
 function addSlugIssues(
   rawSlug: string,
@@ -51,10 +61,15 @@ function addSlugIssues(
   required: boolean
 ) {
   const slug = rawSlug.trim();
-  const noun = kind === "subdomain" ? "Subdomain" : "Slug";
+  const needsSubdomainRules = kindHasSubdomain(kind);
+  const noun = needsSubdomainRules
+    ? kind === "both"
+      ? "Slug"
+      : "Subdomain"
+    : "Slug";
 
   if (slug === "") {
-    if (required || kind === "subdomain") {
+    if (required || needsSubdomainRules) {
       ctx.addIssue({
         code: "custom",
         message: `${noun} is required`,
@@ -82,14 +97,13 @@ function addSlugIssues(
     return;
   }
 
-  const pattern = kind === "subdomain" ? subdomainLabelPattern : slugPattern;
+  const pattern = needsSubdomainRules ? subdomainLabelPattern : slugPattern;
   if (!pattern.test(slug)) {
     ctx.addIssue({
       code: "custom",
-      message:
-        kind === "subdomain"
-          ? "Use letters, numbers, or hyphens"
-          : "Use letters, numbers, underscores, or hyphens",
+      message: needsSubdomainRules
+        ? "Use letters, numbers, or hyphens"
+        : "Use letters, numbers, underscores, or hyphens",
       path: ["slug"],
     });
   }
@@ -117,32 +131,71 @@ function addExpiryIssues(rawExpiresAt: string, ctx: z.RefinementCtx) {
   }
 }
 
-const fullUrlField = z
-  .string()
-  .trim()
-  .min(1, "URL is required")
-  .superRefine((value, ctx) => {
+function addFullUrlIssues(
+  data: {
+    fullUrl: string;
+    target: "url" | "file";
+  },
+  ctx: z.RefinementCtx
+) {
+  const value = data.fullUrl.trim();
+
+  if (data.target === "file") {
+    if (value === "") {
+      // File-source messaging is handled in addFileIssues first.
+      return;
+    }
     try {
       const url = new URL(value);
-      if (url.protocol !== "http:" && url.protocol !== "https:") {
+      if (url.protocol !== "https:") {
         ctx.addIssue({
           code: "custom",
-          message: "URL must start with http:// or https://",
+          message: "File URL must start with https://",
+          path: ["fullUrl"],
         });
       }
     } catch {
       ctx.addIssue({
         code: "custom",
-        message: "Enter a valid URL",
+        message: "Enter a valid file URL",
+        path: ["fullUrl"],
       });
     }
-  });
+    return;
+  }
+
+  if (value === "") {
+    ctx.addIssue({
+      code: "custom",
+      message: "URL is required",
+      path: ["fullUrl"],
+    });
+    return;
+  }
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      ctx.addIssue({
+        code: "custom",
+        message: "URL must start with http:// or https://",
+        path: ["fullUrl"],
+      });
+    }
+  } catch {
+    ctx.addIssue({
+      code: "custom",
+      message: "Enter a valid URL",
+      path: ["fullUrl"],
+    });
+  }
+}
 
 const baseUrlObject = z.object({
-  fullUrl: fullUrlField,
+  fullUrl: z.string().trim(),
   slug: z.string(),
   expiresAt: z.string(),
-  kind: z.enum(["path", "subdomain"]),
+  kind: z.enum(["path", "subdomain", "both"]),
   target: z.enum(["url", "file"]).default("url"),
   disposition: z.enum(["inline", "attachment"]).optional(),
   fileName: z.string().optional(),
@@ -160,6 +213,7 @@ const baseUrlObject = z.object({
 function addFileIssues(
   data: {
     target: "url" | "file";
+    fullUrl: string;
     fileName?: string;
     contentType?: string;
     fileSource?: "blob" | "external";
@@ -171,6 +225,15 @@ function addFileIssues(
     return;
   }
 
+  if (data.fileSource !== "blob" && data.fileSource !== "external") {
+    ctx.addIssue({
+      code: "custom",
+      message: "Upload a file or paste an https file URL",
+      path: ["fileSource"],
+    });
+    return;
+  }
+
   if (!data.fileName?.trim()) {
     ctx.addIssue({
       code: "custom",
@@ -179,7 +242,7 @@ function addFileIssues(
     });
   }
 
-  if (data.fileSource !== "blob" && data.fileSource !== "external") {
+  if (!data.fullUrl.trim()) {
     ctx.addIssue({
       code: "custom",
       message: "Upload a file or paste an https file URL",
@@ -188,7 +251,11 @@ function addFileIssues(
   }
 
   const contentType = data.contentType?.trim() ?? "";
-  if (contentType && !isAllowedFileType(contentType) && mustForceAttachment(contentType)) {
+  if (
+    contentType &&
+    !isAllowedFileType(contentType) &&
+    mustForceAttachment(contentType)
+  ) {
     ctx.addIssue({
       code: "custom",
       message: "That file type is not allowed",
@@ -203,82 +270,68 @@ function addFileIssues(
   }
 }
 
+function normalizeSlug(slug: string, kind: SlugKind): string | undefined {
+  const trimmed = slug.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  return kindHasSubdomain(kind) ? trimmed.toLowerCase() : trimmed;
+}
+
+function transformUrlData(data: z.infer<typeof baseUrlObject>) {
+  const kind = data.kind;
+  const target = data.target === "file" ? "file" : "url";
+  return {
+    fullUrl: data.fullUrl.trim(),
+    slug: normalizeSlug(data.slug, kind),
+    expiresAt:
+      data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
+    kind,
+    target: target === "file" ? ("file" as const) : ("url" as const),
+    disposition:
+      target === "file"
+        ? data.disposition === "attachment"
+          ? ("attachment" as const)
+          : ("inline" as const)
+        : undefined,
+    fileName: target === "file" ? data.fileName?.trim() : undefined,
+    contentType: target === "file" ? data.contentType?.trim() : undefined,
+    fileSize: target === "file" ? data.fileSize : undefined,
+    fileSource: target === "file" ? data.fileSource : undefined,
+    note: data.note?.trim() ? data.note.trim().slice(0, 500) : undefined,
+    password: data.password?.trim() || undefined,
+    removePassword: data.removePassword === true,
+    ogTitle: data.ogTitle?.trim() || undefined,
+    ogDescription: data.ogDescription?.trim() || undefined,
+    ogImageUrl: data.ogImageUrl?.trim() || undefined,
+  };
+}
+
 export const createUrlSchema = baseUrlObject
   .superRefine((data, ctx) => {
+    addFileIssues(data, ctx);
+    addFullUrlIssues(data, ctx);
     addSlugIssues(data.slug, data.kind, ctx, false);
     addExpiryIssues(data.expiresAt, ctx);
-    addFileIssues(data, ctx);
   })
-  .transform((data) => {
-    const kind = data.kind;
-    const slug = data.slug.trim();
-    const target = data.target === "file" ? "file" : "url";
-    return {
-      fullUrl: data.fullUrl,
-      slug:
-        slug === ""
-          ? undefined
-          : kind === "subdomain"
-            ? slug.toLowerCase()
-            : slug,
-      expiresAt: data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
-      kind,
-      target: target === "file" ? ("file" as const) : ("url" as const),
-      disposition:
-        target === "file"
-          ? data.disposition === "attachment"
-            ? ("attachment" as const)
-            : ("inline" as const)
-          : undefined,
-      fileName: target === "file" ? data.fileName?.trim() : undefined,
-      contentType: target === "file" ? data.contentType?.trim() : undefined,
-      fileSize: target === "file" ? data.fileSize : undefined,
-      fileSource: target === "file" ? data.fileSource : undefined,
-      note: data.note?.trim() ? data.note.trim().slice(0, 500) : undefined,
-      password: data.password?.trim() || undefined,
-      removePassword: data.removePassword === true,
-      ogTitle: data.ogTitle?.trim() || undefined,
-      ogDescription: data.ogDescription?.trim() || undefined,
-      ogImageUrl: data.ogImageUrl?.trim() || undefined,
-    };
-  });
+  .transform(transformUrlData);
 
 /**
  * Editing an existing link. A short code always exists, so the slug is
- * required for both path and subdomain links.
+ * required for path, subdomain, and both.
  */
 export const editUrlSchema = baseUrlObject
   .superRefine((data, ctx) => {
+    addFileIssues(data, ctx);
+    addFullUrlIssues(data, ctx);
     addSlugIssues(data.slug, data.kind, ctx, true);
     addExpiryIssues(data.expiresAt, ctx);
-    addFileIssues(data, ctx);
   })
   .transform((data) => {
-    const kind = data.kind;
-    const slug = data.slug.trim();
-    const target = data.target === "file" ? "file" : "url";
+    const result = transformUrlData(data);
     return {
-      fullUrl: data.fullUrl,
-      slug: kind === "subdomain" ? slug.toLowerCase() : slug,
-      expiresAt: data.expiresAt.trim() === "" ? undefined : data.expiresAt.trim(),
-      kind,
-      target: target === "file" ? ("file" as const) : ("url" as const),
-      disposition:
-        target === "file"
-          ? data.disposition === "attachment"
-            ? ("attachment" as const)
-            : ("inline" as const)
-          : undefined,
-      fileName: target === "file" ? data.fileName?.trim() : undefined,
-      contentType: target === "file" ? data.contentType?.trim() : undefined,
-      fileSize: target === "file" ? data.fileSize : undefined,
-      fileSource: target === "file" ? data.fileSource : undefined,
-      note: data.note?.trim() ? data.note.trim().slice(0, 500) : undefined,
-      password: data.password?.trim() || undefined,
-      removePassword: data.removePassword === true,
-      ogTitle: data.ogTitle?.trim() || undefined,
-      ogDescription: data.ogDescription?.trim() || undefined,
-      ogImageUrl: data.ogImageUrl?.trim() || undefined,
+      ...result,
+      slug: result.slug ?? data.slug.trim(),
     };
   });
 

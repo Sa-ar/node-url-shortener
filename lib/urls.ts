@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
 import { isExpired } from "@/lib/dates";
 import { vanityShortUrl } from "@/lib/hosts";
-import { ShortUrl, type ShortUrlAttrs } from "@/lib/models/short-url";
+import { ShortUrl, type ShortUrlAttrs, type ShortUrlKind } from "@/lib/models/short-url";
 import type { DailyClick, ShortUrlDto } from "@/lib/types";
+import { kindHasPath, kindHasSubdomain } from "@/lib/validations/url";
 
 const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
 
@@ -24,14 +25,52 @@ export function getBaseUrl(request?: Request) {
 
 export function shortUrlKind(
   doc: Pick<ShortUrlAttrs, "kind"> | { kind?: string | null }
-): "path" | "subdomain" {
-  return doc.kind === "subdomain" ? "subdomain" : "path";
+): ShortUrlKind {
+  if (doc.kind === "subdomain") return "subdomain";
+  if (doc.kind === "both") return "both";
+  return "path";
 }
 
 export function shortUrlTarget(
   doc: Pick<ShortUrlAttrs, "target"> | { target?: string | null }
 ): "url" | "file" {
   return doc.target === "file" ? "file" : "url";
+}
+
+/** Kinds that conflict with a proposed kind for the same short label. */
+export function conflictingKinds(kind: ShortUrlKind): ShortUrlKind[] {
+  switch (kind) {
+    case "path":
+      return ["path", "both"];
+    case "subdomain":
+      return ["subdomain", "both"];
+    case "both":
+      return ["path", "subdomain", "both"];
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
+
+/**
+ * Returns true when another document already claims the short label
+ * under a conflicting kind (path vs both, subdomain vs both, etc.).
+ */
+export async function hasSlugCollision(
+  short: string,
+  kind: ShortUrlKind,
+  excludeId?: string
+): Promise<boolean> {
+  const filter: Record<string, unknown> = {
+    short,
+    kind: { $in: conflictingKinds(kind) },
+  };
+  if (excludeId && OBJECT_ID_RE.test(excludeId)) {
+    filter._id = { $ne: excludeId };
+  }
+  const existing = await ShortUrl.findOne(filter).select("_id").lean();
+  return Boolean(existing);
 }
 
 export function serializeShortUrl(
@@ -43,21 +82,29 @@ export function serializeShortUrl(
   extras?: { createdByName?: string | null }
 ): ShortUrlDto {
   const kind = shortUrlKind(doc);
+  const pathUrl = kindHasPath(kind) ? `${baseUrl}/${doc.short}` : null;
+  const vanityUrl = kindHasSubdomain(kind) ? vanityShortUrl(doc.short) : null;
   return {
     id: doc._id.toString(),
     full: doc.full,
     short: doc.short,
-    shortUrl:
-      kind === "subdomain"
-        ? vanityShortUrl(doc.short)
-        : `${baseUrl}/${doc.short}`,
+    shortUrl: vanityUrl ?? pathUrl ?? `${baseUrl}/${doc.short}`,
+    pathUrl,
     kind,
     target: shortUrlTarget(doc),
-    disposition: doc.disposition === "attachment" ? "attachment" : doc.disposition === "inline" ? "inline" : null,
+    disposition:
+      doc.disposition === "attachment"
+        ? "attachment"
+        : doc.disposition === "inline"
+          ? "inline"
+          : null,
     fileName: doc.fileName ?? null,
     contentType: doc.contentType ?? null,
     fileSize: doc.fileSize ?? null,
-    fileSource: doc.fileSource === "blob" || doc.fileSource === "external" ? doc.fileSource : null,
+    fileSource:
+      doc.fileSource === "blob" || doc.fileSource === "external"
+        ? doc.fileSource
+        : null,
     note: doc.note ?? null,
     createdByName: extras?.createdByName ?? null,
     hasPassword: Boolean(doc.passwordHash),
@@ -88,8 +135,11 @@ export function findShortUrl(id: string) {
     return ShortUrl.findOne({ _id: id });
   }
 
-  // Short labels are unique per kind; bare slug lookups mean path links.
-  return ShortUrl.findOne({ short: id, kind: { $ne: "subdomain" } });
+  // Bare slug lookups mean path-capable links (path or both).
+  return ShortUrl.findOne({
+    short: id,
+    kind: { $in: ["path", "both"] },
+  });
 }
 
 export function findOwnedShortUrl(id: string, userId: string) {
@@ -100,7 +150,7 @@ export function findOwnedShortUrl(id: string, userId: string) {
   return ShortUrl.findOne({
     userId,
     short: id,
-    kind: { $ne: "subdomain" },
+    kind: { $in: ["path", "both"] },
   });
 }
 

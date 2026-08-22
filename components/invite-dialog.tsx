@@ -72,7 +72,7 @@ export function InviteDialog() {
         <UserPlus data-icon="inline-start" />
         Invite
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="min-w-0 overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Invite someone</DialogTitle>
           <DialogDescription>
@@ -122,10 +122,10 @@ export function InviteDialog() {
               {(invitesQuery.data as InviteDto[]).map((invite) => (
                 <li
                   key={invite.id}
-                  className="flex items-start justify-between gap-2 rounded-lg border px-3 py-2"
+                  className="flex min-w-0 items-start justify-between gap-2 overflow-hidden rounded-lg border px-3 py-2"
                 >
-                  <div className="min-w-0 space-y-1">
-                    <p className="truncate font-mono text-xs">{invite.url}</p>
+                  <div className="min-w-0 flex-1 space-y-1 overflow-hidden">
+                    <p className="break-all font-mono text-xs">{invite.url}</p>
                     <p className="text-xs text-muted-foreground">
                       Expires {formatDate(invite.expiresAt)}
                     </p>

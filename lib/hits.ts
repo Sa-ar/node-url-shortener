@@ -21,8 +21,14 @@ export async function resolvePublicHit(
   await connectDB();
   const doc =
     kind === "subdomain"
-      ? await ShortUrl.findOne({ short: slug, kind: "subdomain" })
-      : await ShortUrl.findOne({ short: slug, kind: { $ne: "subdomain" } });
+      ? await ShortUrl.findOne({
+          short: slug,
+          kind: { $in: ["subdomain", "both"] },
+        })
+      : await ShortUrl.findOne({
+          short: slug,
+          kind: { $in: ["path", "both"] },
+        });
 
   if (!doc || isExpired(doc.expiresAt)) {
     return null;

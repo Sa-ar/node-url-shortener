@@ -22,14 +22,9 @@ export function FormField({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "grid grid-rows-[auto_2.25rem_1.25rem] items-start gap-2",
-        className
-      )}
-    >
-      <div className="flex h-5 min-w-0 items-baseline gap-2 leading-5">
-        <Label htmlFor={htmlFor} className="truncate leading-5">
+    <div className={cn("grid min-w-0 items-start gap-2", className)}>
+      <div className="flex min-w-0 items-baseline gap-2 leading-5">
+        <Label htmlFor={htmlFor} className="leading-5">
           {label}
         </Label>
         {requirement ? (
@@ -38,14 +33,14 @@ export function FormField({
           </span>
         ) : null}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
       <p
         className={cn(
-          "truncate text-xs leading-5",
+          "min-h-5 break-words text-xs leading-5",
           error ? "text-destructive" : "text-muted-foreground"
         )}
       >
-        {error ?? hint ?? "\u00a0"}
+        {error ?? hint ?? " "}
       </p>
     </div>
   );

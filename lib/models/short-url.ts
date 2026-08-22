@@ -6,7 +6,7 @@ export type DailyClick = {
   count: number;
 };
 
-export type ShortUrlKind = "path" | "subdomain";
+export type ShortUrlKind = "path" | "subdomain" | "both";
 export type ShortUrlTarget = "url" | "file";
 export type FileDisposition = "inline" | "attachment";
 export type FileSource = "blob" | "external";
@@ -59,7 +59,7 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
     },
     kind: {
       type: String,
-      enum: ["path", "subdomain"],
+      enum: ["path", "subdomain", "both"],
       required: true,
       default: "path",
     },
@@ -95,8 +95,8 @@ const shortUrlSchema = new Schema<ShortUrlAttrs>(
   { timestamps: true }
 );
 
-// Path slugs and subdomain labels are separate namespaces:
-// saar.to/resume and resume.saar.to may both exist.
+// Path and subdomain are separate namespaces (kind+short unique).
+// kind "both" claims both hosts for one document (app-level collision checks).
 shortUrlSchema.index({ kind: 1, short: 1 }, { unique: true });
 shortUrlSchema.index({ createdAt: -1 });
 shortUrlSchema.index({ userId: 1, createdAt: -1 });
